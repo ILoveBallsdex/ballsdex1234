@@ -36,7 +36,7 @@ module.exports = {
 
     if (!staffEntry) {
       return interaction.reply({
-        content: 'You are not assigned to any team.',
+        content: 'You are not on any team.',
         ephemeral: true
       });
     }
