@@ -8,8 +8,11 @@ const {
 } = require('discord.js');
 
 const { SIGN_ROLE } = require('../../utils/permissions');
-const { loadJSON } = require('../../utils/database');
 const { logAction } = require('../../utils/logger');
+
+// ⭐ MongoDB Models
+const Staffs = require('../../models/staffs');
+const Teams = require('../../models/teams');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -25,10 +28,7 @@ module.exports = {
 
     // --- PERMISSION CHECK ---
     const allowedRoles = Array.isArray(SIGN_ROLE) ? SIGN_ROLE : [SIGN_ROLE];
-    if (
-      allowedRoles.length > 0 &&
-      !allowedRoles.some(roleId => interaction.member.roles.cache.has(roleId))
-    ) {
+    if (!allowedRoles.some(roleId => interaction.member.roles.cache.has(roleId))) {
       return interaction.reply({
         content: 'You do not have permission to use this command.',
         ephemeral: true
@@ -36,8 +36,8 @@ module.exports = {
     }
     // -------------------------
 
-    const staff = loadJSON('staff.json');
-    const staffEntry = staff.find(s => s.userId === interaction.user.id);
+    // ⭐ Load staff entry for executor
+    const staffEntry = await Staffs.findOne({ userId: interaction.user.id });
 
     if (!staffEntry) {
       return interaction.reply({
@@ -46,8 +46,8 @@ module.exports = {
       });
     }
 
-    const teams = loadJSON('teams.json');
-    const team = teams.find(t => t.roleId === staffEntry.teamRoleId);
+    // ⭐ Load team from DB
+    const team = await Teams.findOne({ roleId: staffEntry.teamRoleId });
 
     if (!team) {
       return interaction.reply({
@@ -59,8 +59,9 @@ module.exports = {
     const player = interaction.options.getUser('player');
     const member = await interaction.guild.members.fetch(player.id);
 
-    // Check if player is already on ANY team
-    const alreadyOnTeam = teams.find(t => member.roles.cache.has(t.roleId));
+    // ⭐ Check if player is already on ANY team
+    const allTeams = await Teams.find();
+    const alreadyOnTeam = allTeams.find(t => member.roles.cache.has(t.roleId));
 
     if (alreadyOnTeam) {
       return interaction.reply({
@@ -69,7 +70,7 @@ module.exports = {
       });
     }
 
-    // SIGN PLAYER
+    // ⭐ SIGN PLAYER
     await member.roles.add(team.roleId);
 
     // --- EMBED LOG ---
