@@ -138,19 +138,21 @@ module.exports = {
 
     const guild = interaction.guild;
 
+    // ⭐ FIXED: TEAM LOGO IN TOP RIGHT
+    const teamEmoji = executorEntry.emoji;
+    const teamThumbnail = teamEmoji && teamEmoji.startsWith('<')
+      ? `https://cdn.discordapp.com/emojis/${teamEmoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+      : guild.iconURL({ size: 256 });
+
     // --- EMBED LOG ---
     const embed = new EmbedBuilder()
       .setColor('#2ecc71')
       .setAuthor({
-        name: guild.name,
+        name: guild.name, // league logo top-left
         iconURL: guild.iconURL({ size: 256 })
       })
       .setTitle('Team Promotion')
-      .setThumbnail(
-        executorEntry.emoji && executorEntry.emoji.startsWith('<')
-          ? `https://cdn.discordapp.com/emojis/${executorEntry.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
-          : guild.iconURL({ size: 256 })
-      )
+      .setThumbnail(teamThumbnail) // ⭐ TEAM LOGO TOP-RIGHT
       .addFields(
         { name: 'Team', value: `<@&${executorEntry.teamRoleId}>`, inline: false },
         { name: 'Old Position', value: oldPosition ? `<@&${oldRoleId}> (${pretty(oldPosition)})` : '*None*', inline: true },
