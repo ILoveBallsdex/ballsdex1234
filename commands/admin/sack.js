@@ -1,6 +1,8 @@
 const {
   SlashCommandBuilder,
-  EmbedBuilder
+  EmbedBuilder,
+  ActionRowBuilder,
+  StringSelectMenuBuilder
 } = require('discord.js');
 
 const {
@@ -25,15 +27,10 @@ function getStaffRoleId(position) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('sack')
-    .setDescription('Removes a users management position + releases them off their team')
+    .setDescription('Removes a user’s management position + releases them from their team')
     .addUserOption(opt =>
       opt.setName('user')
         .setDescription('User to sack')
-        .setRequired(true)
-    )
-    .addStringOption(opt =>
-      opt.setName('team')
-        .setDescription('Team name')
         .setRequired(true)
     ),
 
@@ -41,10 +38,7 @@ module.exports = {
 
     // --- PERMISSION CHECK ---
     const allowedRoles = Array.isArray(SACK_ROLE) ? SACK_ROLE : [SACK_ROLE];
-    if (
-      allowedRoles.length > 0 &&
-      !allowedRoles.some(roleId => interaction.member.roles.cache.has(roleId))
-    ) {
+    if (!allowedRoles.some(roleId => interaction.member.roles.cache.has(roleId))) {
       return interaction.reply({
         content: 'You do not have permission to use this command.',
         ephemeral: true
@@ -53,81 +47,124 @@ module.exports = {
     // -------------------------
 
     const user = interaction.options.getUser('user');
-    const teamName = interaction.options.getString('team');
 
     const teams = loadJSON('teams.json');
     const staff = loadJSON('staff.json');
 
-    const team = teams.find(
-      t => t.name.toLowerCase() === teamName.toLowerCase()
-    );
-
-    if (!team) {
+    if (!teams.length) {
       return interaction.reply({
-        content: `No team named **${teamName}** found.`,
+        content: 'There are no teams to sack staff from.',
         ephemeral: true
       });
     }
 
-    // Find staff entry
-    const staffIndex = staff.findIndex(
-      s => s.userId === user.id && s.teamRoleId === team.roleId
-    );
+    // --- TEAM DROPDOWN ---
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId('sack-team-select')
+      .setPlaceholder('Select the team this user is staff for')
+      .addOptions(
+        teams.map(t => ({
+          label: t.name,
+          value: t.roleId,
+          emoji: t.emoji || undefined
+        }))
+      );
 
-    if (staffIndex === -1) {
-      return interaction.reply({
-        content: `${user} is not a staff member of **${team.name}**.`,
-        ephemeral: true
-      });
-    }
-
-    const removed = staff[staffIndex];
-
-    // Remove from staff.json
-    staff.splice(staffIndex, 1);
-    saveJSON('staff.json', staff);
-
-    // Fetch guild member
-    const member = await interaction.guild.members.fetch(user.id);
-
-    // Remove team role
-    if (member.roles.cache.has(team.roleId)) {
-      await member.roles.remove(team.roleId);
-    }
-
-    // Remove staff hierarchy role
-    const staffRoleId = getStaffRoleId(removed.position);
-    if (staffRoleId && member.roles.cache.has(staffRoleId)) {
-      await member.roles.remove(staffRoleId);
-    }
-
-    // --- EMBED LOG ---
-    const guild = interaction.guild;
-
-    const embed = new EmbedBuilder()
-      .setColor('#e74c3c')
-      .setAuthor({
-        name: guild.name,
-        iconURL: guild.iconURL({ size: 256 })
-      })
-      .setTitle('Staff Member Sacked')
-      .setThumbnail(
-        team.emoji && team.emoji.startsWith('<')
-          ? `https://cdn.discordapp.com/emojis/${team.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
-          : guild.iconURL({ size: 256 }) // fallback for unicode emoji
-      )
-      .addFields(
-        { name: 'Team', value: `${team.emoji} <@&${team.roleId}>`, inline: false },
-        { name: 'Position Removed', value: `**${removed.position}**`, inline: true },
-        { name: 'User Sacked', value: `${user.tag}`, inline: false },
-        { name: 'Sacked By', value: `${interaction.user.tag}`, inline: false }
-      )
-      .setTimestamp();
-
-    await logAction(client, { embeds: [embed] });
+    const row = new ActionRowBuilder().addComponents(menu);
 
     await interaction.reply({
-      content: `${user} has been sacked from **${team.name}** (was **${removed.position}**).`
+      content: 'Select the team you want to sack this user from:',
+      components: [row],
+      ephemeral: true
+    });
+
+    // --- COLLECTOR ---
+    const collector = interaction.channel.createMessageComponentCollector({
+      filter: i => i.customId === 'sack-team-select' && i.user.id === interaction.user.id,
+      time: 15000
+    });
+
+    collector.on('collect', async i => {
+      const teamRoleId = i.values[0];
+      const team = teams.find(t => t.roleId === teamRoleId);
+
+      if (!team) {
+        return i.update({
+          content: 'This team no longer exists.',
+          components: []
+        });
+      }
+
+      // Find staff entry
+      const staffIndex = staff.findIndex(
+        s => s.userId === user.id && s.teamRoleId === team.roleId
+      );
+
+      if (staffIndex === -1) {
+        return i.update({
+          content: `${user} is not a staff member of **${team.name}**.`,
+          components: []
+        });
+      }
+
+      const removed = staff[staffIndex];
+
+      // Remove from staff.json
+      staff.splice(staffIndex, 1);
+      saveJSON('staff.json', staff);
+
+      // Fetch guild member
+      const member = await interaction.guild.members.fetch(user.id);
+
+      // Remove team role
+      if (member.roles.cache.has(team.roleId)) {
+        await member.roles.remove(team.roleId);
+      }
+
+      // Remove staff hierarchy role
+      const staffRoleId = getStaffRoleId(removed.position);
+      if (staffRoleId && member.roles.cache.has(staffRoleId)) {
+        await member.roles.remove(staffRoleId);
+      }
+
+      // --- EMBED LOG ---
+      const guild = interaction.guild;
+
+      const embed = new EmbedBuilder()
+        .setColor('#e74c3c')
+        .setAuthor({
+          name: guild.name,
+          iconURL: guild.iconURL({ size: 256 })
+        })
+        .setTitle('Staff Member Sacked')
+        .setThumbnail(
+          team.emoji && team.emoji.startsWith('<')
+            ? `https://cdn.discordapp.com/emojis/${team.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+            : guild.iconURL({ size: 256 })
+        )
+        .addFields(
+          { name: 'Team', value: `${team.emoji} <@&${team.roleId}>`, inline: false },
+          { name: 'Position Removed', value: `**${removed.position}**`, inline: true },
+          { name: 'User Sacked', value: `${user.tag}`, inline: false },
+          { name: 'Sacked By', value: `${interaction.user.tag}`, inline: false }
+        )
+        .setTimestamp();
+
+      await logAction(client, { embeds: [embed] });
+
+      await i.update({
+        content: `${user} has been sacked from **${team.name}** (was **${removed.position}**).`,
+        components: []
+      });
+    });
+
+    collector.on('end', collected => {
+      if (collected.size === 0) {
+        interaction.editReply({
+          content: 'No team selected. Command cancelled.',
+          components: []
+        });
+      }
     });
   }
 };
