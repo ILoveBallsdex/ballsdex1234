@@ -7,6 +7,11 @@ const { CREATE_DIVISION_ROLE } = require('../../utils/permissions');
 const { logAction } = require('../../utils/logger');
 const Divisions = require('../../models/divisions');
 
+// Escape regex special characters so "GFC | EPL" is treated literally
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('createdivision')
@@ -40,7 +45,7 @@ module.exports = {
     }
     // -------------------------
 
-    // ⭐ FULL UNICODE‑SAFE NORMALIZATION (fixes EPL bug permanently)
+    // ⭐ FULL UNICODE‑SAFE NORMALIZATION
     let name = interaction.options.getString('name')
       .normalize("NFKD")
       .replace(/[\u200B-\u200D\uFEFF]/g, '') // remove zero‑width chars
@@ -49,9 +54,12 @@ module.exports = {
 
     const emoji = interaction.options.getString('emoji');
 
+    // ⭐ ESCAPE REGEX SPECIAL CHARACTERS (fixes GFC | EPL)
+    const safeName = escapeRegex(name);
+
     // ⭐ Duplicate check (case‑insensitive)
     const existing = await Divisions.findOne({
-      name: { $regex: new RegExp(`^${name}$`, 'i') }
+      name: { $regex: new RegExp(`^${safeName}$`, 'i') }
     });
 
     if (existing) {
