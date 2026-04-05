@@ -1,7 +1,8 @@
 const {
   SlashCommandBuilder,
   ActionRowBuilder,
-  StringSelectMenuBuilder
+  StringSelectMenuBuilder,
+  EmbedBuilder
 } = require('discord.js');
 
 const { REMOVE_DIVISION_ROLE } = require('../../utils/permissions');
@@ -15,7 +16,7 @@ module.exports = {
 
   async execute(interaction, client) {
 
-    // --- PERMISSION CHECK (supports single or multiple role IDs) ---
+    // --- PERMISSION CHECK ---
     const allowedRoles = Array.isArray(REMOVE_DIVISION_ROLE)
       ? REMOVE_DIVISION_ROLE
       : [REMOVE_DIVISION_ROLE];
@@ -29,7 +30,7 @@ module.exports = {
         ephemeral: true
       });
     }
-    // ----------------------------------------------------------------
+    // -------------------------
 
     const divisions = loadJSON('divisions.json');
 
@@ -68,7 +69,7 @@ module.exports = {
     collector.on('collect', async i => {
       const selectedName = i.values[0];
 
-      // Remove division
+      // Reload divisions
       const divisions = loadJSON('divisions.json');
       const index = divisions.findIndex(d => d.name === selectedName);
 
@@ -91,10 +92,29 @@ module.exports = {
 
       const removedTeams = beforeCount - teams.length;
 
-      await logAction(
-        client,
-        `🗑️ Division **${removed.emoji} ${removed.name}** and **${removedTeams} teams** inside it were removed by ${interaction.user.tag}.`
-      );
+      // --- EMBED LOG ---
+      const guild = interaction.guild;
+
+      const embed = new EmbedBuilder()
+        .setColor('#e74c3c')
+        .setAuthor({
+          name: guild.name,
+          iconURL: guild.iconURL({ size: 256 })
+        })
+        .setTitle('Division Removed')
+        .setThumbnail(
+          removed.emoji && removed.emoji.startsWith('<')
+            ? `https://cdn.discordapp.com/emojis/${removed.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+            : guild.iconURL({ size: 256 }) // fallback for unicode emoji
+        )
+        .addFields(
+          { name: 'Division', value: `${removed.emoji} **${removed.name}**`, inline: false },
+          { name: 'Teams Removed', value: `**${removedTeams}**`, inline: true },
+          { name: 'Removed By', value: `${interaction.user.tag}`, inline: false }
+        )
+        .setTimestamp();
+
+      await logAction(client, { embeds: [embed] });
 
       await i.update({
         content: `Division **${removed.emoji} ${removed.name}** has been removed.\nRemoved **${removedTeams}** teams from that division.`,
