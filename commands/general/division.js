@@ -71,7 +71,7 @@ module.exports = {
     await interaction.reply({
       content: "Select a division to view its teams:",
       components: [row],
-      ephemeral: false, // PUBLIC
+      ephemeral: false, // ⭐ NOW PUBLIC
     });
   },
 
@@ -119,9 +119,7 @@ module.exports = {
       .setTitle(`${division.emoji} ${division.name}`)
       .setColor(0x5865f2)
       .setDescription(
-        `### Division Overview\n` +
-        `Below is a full list of teams, their management, and player counts.\n\n` +
-        `Vacant positions mean the team is available to claim.`
+        `### Teams in this division\nA full overview of every team, their management, and player count.`
       )
       .setTimestamp();
 
@@ -139,22 +137,15 @@ module.exports = {
       const role = await interaction.guild.roles.fetch(team.roleId).catch(() => null);
       const playerCount = role ? role.members.size : 0;
 
-      embed.addFields(
-        {
-          name: `${team.emoji} **${team.name}**`,
-          value:
-            `Chairman: **${chairmanText}**\n` +
-            `Manager: **${managerText}**\n` +
-            `Assistant Manager: **${assistantText}**\n` +
-            `Players: **${playerCount}**`,
-          inline: false,
-        },
-        {
-          name: '\u200B',
-          value: '\u200B',
-          inline: false
-        }
-      );
+      embed.addFields({
+        name: `${team.emoji} **${team.name}**`,
+        value:
+          `> 👑 **Chairman:** ${chairmanText}\n` +
+          `> 🧩 **Manager:** ${managerText}\n` +
+          `> 🎯 **Assistant Manager:** ${assistantText}\n` +
+          `> 👥 **Players:** ${playerCount}`,
+        inline: false,
+      });
     }
 
     await interaction.update({
