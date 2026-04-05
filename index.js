@@ -4,6 +4,11 @@ const fs = require('fs');
 const path = require('path');
 const { keepAlive } = require('./keep_alive');
 
+// ⭐ ADD THIS
+const connectMongo = require('./utils/mongo');
+// ⭐ CONNECT TO MONGO
+connectMongo();
+
 keepAlive();
 
 const client = new Client({
@@ -62,5 +67,6 @@ client.once('ready', async () => {
     console.error('Failed to register slash commands:', err);
   }
 });
+
 console.log("TOKEN VALUE:", process.env.TOKEN);
 client.login(process.env.TOKEN);
