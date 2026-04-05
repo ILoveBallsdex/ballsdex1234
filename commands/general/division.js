@@ -1,160 +1,86 @@
 const {
   SlashCommandBuilder,
   StringSelectMenuBuilder,
-  StringSelectMenuOptionBuilder,
   ActionRowBuilder,
-  EmbedBuilder,
+  EmbedBuilder
 } = require("discord.js");
 
-const { DIVISION_ROLE } = require("../../utils/permissions");
-const Divisions = require("../../models/divisions");
 const Teams = require("../../models/teams");
 const Staffs = require("../../models/staffs");
-
-// Escape regex special characters so "GFC | EPL" is treated literally
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// Normalize Unicode (removes zero‑width chars, weird spacing, etc.)
-function normalizeName(str) {
-  return str
-    .normalize("NFKD")
-    .replace(/[\u200B-\u200D\uFEFF]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("division")
-    .setDescription("View all divisions and their teams"),
+    .setDescription("View teams in a division"),
 
   async execute(interaction, client) {
-    const allowedRoles = Array.isArray(DIVISION_ROLE)
-      ? DIVISION_ROLE
-      : [DIVISION_ROLE];
 
-    if (
-      allowedRoles.length > 0 &&
-      !allowedRoles.some((roleId) => interaction.member.roles.cache.has(roleId))
-    ) {
-      return interaction.reply({
-        content: "You do not have permission to use this command.",
-        ephemeral: true,
-      });
-    }
+    const divisions = ["Division 1", "Division 2", "Division 3"];
 
-    const divisions = await Divisions.find();
-
-    if (divisions.length === 0) {
-      return interaction.reply({
-        content: "There are no divisions yet.",
-        ephemeral: true,
-      });
-    }
-
-    const options = divisions.map((d) =>
-      new StringSelectMenuOptionBuilder()
-        .setLabel(d.name)
-        .setValue(d.name)
-        .setEmoji(d.emoji)
-    );
-
-    const select = new StringSelectMenuBuilder()
+    const menu = new StringSelectMenuBuilder()
       .setCustomId("select_division")
-      .setPlaceholder("Choose a division...")
-      .addOptions(options);
+      .setPlaceholder("Select a division...")
+      .addOptions(
+        divisions.map(d => ({
+          label: d,
+          value: d
+        }))
+      );
 
-    const row = new ActionRowBuilder().addComponents(select);
+    const row = new ActionRowBuilder().addComponents(menu);
 
     await interaction.reply({
-      content: "Select a division to view its teams:",
+      content: "Choose a division:",
       components: [row],
-      ephemeral: false, // ⭐ PUBLIC
+      ephemeral: false
     });
   },
 
   async handleSelect(interaction, client) {
-    const allowedRoles = Array.isArray(DIVISION_ROLE)
-      ? DIVISION_ROLE
-      : [DIVISION_ROLE];
+    await interaction.deferUpdate();
 
-    if (
-      allowedRoles.length > 0 &&
-      !allowedRoles.some((roleId) => interaction.member.roles.cache.has(roleId))
-    ) {
-      return interaction.reply({
-        content: "You do not have permission.",
-        ephemeral: true,
+    const division = interaction.values[0];
+
+    const teams = await Teams.find({ division });
+    if (!teams.length) {
+      return interaction.editReply({
+        content: `No teams found in ${division}.`,
+        components: []
       });
     }
 
-    const rawName = interaction.values[0];
-    const normalizedName = normalizeName(rawName);
-    const safeName = escapeRegex(normalizedName);
-
-    const division = await Divisions.findOne({
-      name: { $regex: new RegExp(`^${safeName}$`, "i") },
-    });
-
-    if (!division) {
-      return interaction.reply({
-        content: "Division not found.",
-        ephemeral: true,
-      });
-    }
-
-    const teams = await Teams.find({ division: division.name });
-    const staff = await Staffs.find();
-
-    if (teams.length === 0) {
-      return interaction.update({
-        content: `**${division.emoji} ${division.name}** has no teams yet.`,
-        components: [],
-      });
-    }
-
-    // ⭐ Fetch all members to ensure accurate player counts
-    const allMembers = await interaction.guild.members.fetch();
-
-    const embed = new EmbedBuilder()
-      .setTitle(`${division.emoji} ${division.name}`)
-      .setColor(0x5865f2)
-      .setDescription(
-        `### Teams in this division\nA full overview of every team, their management, and player count.`
-      )
-      .setTimestamp();
+    let description = "";
 
     for (const team of teams) {
-      const teamStaff = staff.filter((s) => s.teamRoleId === team.roleId);
+      const staff = await Staffs.find({ teamRoleId: team.roleId });
 
-      const chairman = teamStaff.find((s) => s.position === "chairman");
-      const manager = teamStaff.find((s) => s.position === "manager");
-      const assistant = teamStaff.find((s) => s.position === "assistant");
+      const chairman = staff.find(s => s.position === "chairman");
+      const manager = staff.find(s => s.position === "manager");
+      const assistant = staff.find(s => s.position === "assistant");
 
       const chairmanText = chairman ? `<@${chairman.userId}>` : "Vacant";
       const managerText = manager ? `<@${manager.userId}>` : "Vacant";
       const assistantText = assistant ? `<@${assistant.userId}>` : "Vacant";
 
-      // ⭐ Accurate player count: count ALL members with the team role
-      const playerCount = allMembers.filter(m => m.roles.cache.has(team.roleId)).size;
+      const playerCount = team.players?.length || 0;
 
-      embed.addFields({
-        name: `${team.emoji} **${team.name}**`,
-        value:
-          `> 👑 **Chairman:** ${chairmanText}\n` +
-          `> 🧩 **Manager:** ${managerText}\n` +
-          `> 🎯 **Assistant Manager:** ${assistantText}\n` +
-          `> 👥 **Players:** ${playerCount}`,
-        inline: false,
-      });
+      description += `${team.emoji} **${team.name}**\n` +
+        `• Chairman: ${chairmanText}\n` +
+        `• Manager: ${managerText}\n` +
+        `• Assistant: ${assistantText}\n` +
+        `• Players: **${playerCount}**\n\n`;
     }
 
-    await interaction.update({
+    const embed = new EmbedBuilder()
+      .setColor("#2ecc71")
+      .setTitle(`${division} — Teams`)
+      .setDescription(description)
+      .setTimestamp();
+
+    await interaction.editReply({
       content: "",
       embeds: [embed],
-      components: [],
+      components: []
     });
-  },
+  }
 };
