@@ -56,7 +56,7 @@ module.exports = {
 
     const executorEntry = staff.find(s => s.userId === interaction.user.id);
     if (!executorEntry) {
-      return interaction.reply({ content: 'You are not a staff member of any team.', ephemeral: true });
+      return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
     }
 
     const executorRank = HIERARCHY.indexOf(executorEntry.position);
@@ -75,7 +75,7 @@ module.exports = {
     );
 
     if (!targetEntry) {
-      return interaction.reply({ content: `${targetUser} is not staff on your team.`, ephemeral: true });
+      return interaction.reply({ content: `${targetUser} is not in a management position on your team.`, ephemeral: true });
     }
 
     const targetRank = HIERARCHY.indexOf(targetEntry.position);
