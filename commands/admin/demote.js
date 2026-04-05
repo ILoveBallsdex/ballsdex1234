@@ -11,18 +11,27 @@ const {
 } = require('../../utils/permissions');
 
 const { logAction } = require('../../utils/logger');
-
-// ⭐ Import MongoDB model
 const Staffs = require('../../models/staffs');
 
 const HIERARCHY = ['assistant', 'manager', 'chairman'];
 
+// ⭐ Position → Role ID mapping
 function getStaffRoleId(position) {
   switch (position) {
-    case 'assistant': return ASSISTANT_MANAGER_ROLE;
-    case 'manager': return MANAGER_ROLE;
+    case 'assistant': return '1374495166651437169'; // Assistant Manager
+    case 'manager': return '1374495160632610918';   // Manager
     case 'chairman': return CHAIRMAN_ROLE;
     default: return null;
+  }
+}
+
+// ⭐ Position → Pretty Name
+function pretty(position) {
+  switch (position) {
+    case 'assistant': return 'Assistant Manager';
+    case 'manager': return 'Manager';
+    case 'chairman': return 'Chairman';
+    default: return 'Team Player';
   }
 }
 
@@ -58,7 +67,7 @@ module.exports = {
     const targetUser = interaction.options.getUser('user');
     const toPosition = interaction.options.getString('to');
 
-    // ⭐ Load staff from MongoDB
+    // ⭐ Load executor staff entry
     const executorEntry = await Staffs.findOne({ userId: interaction.user.id });
     if (!executorEntry) {
       return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
@@ -109,7 +118,7 @@ module.exports = {
 
       if (conflicting) {
         return interaction.reply({
-          content: `There is already a **${toPosition}** on this team. Remove them first.`,
+          content: `There is already a **${pretty(toPosition)}** on this team. Remove them first.`,
           ephemeral: true
         });
       }
@@ -127,7 +136,6 @@ module.exports = {
     if (toPosition === 'none') {
       await Staffs.deleteOne({ _id: targetEntry._id });
 
-      // --- EMBED LOG ---
       const guild = interaction.guild;
 
       const embed = new EmbedBuilder()
@@ -136,21 +144,21 @@ module.exports = {
           name: guild.name,
           iconURL: guild.iconURL({ size: 256 })
         })
-        .setTitle('Staff Demotion')
+        .setTitle('Team Demotion')
         .setThumbnail(guild.iconURL({ size: 256 }))
         .addFields(
           { name: 'Team', value: `<@&${teamRoleId}>`, inline: false },
-          { name: 'Old Position', value: `**${oldPosition}**`, inline: false },
-          { name: 'New Position', value: `**Team Member**`, inline: false },
-          { name: 'Demoted User', value: `${targetUser.tag}`, inline: false },
-          { name: 'Demoted By', value: `${interaction.user.tag}`, inline: false }
+          { name: 'Old Position', value: `<@&${oldRoleId}> (${pretty(oldPosition)})`, inline: false },
+          { name: 'New Position', value: `Team Player`, inline: false },
+          { name: 'Demoted User', value: `<@${targetUser.id}>`, inline: false },
+          { name: 'Demoted By', value: `<@${interaction.user.id}>`, inline: false }
         )
         .setTimestamp();
 
       await logAction(client, { embeds: [embed] });
 
       return interaction.reply({
-        content: `${targetUser} is now a **Team Member** of **${teamName}**.`
+        content: `<@${targetUser.id}> is now a **Team Player** of **${teamName}**.`
       });
     }
 
@@ -162,7 +170,6 @@ module.exports = {
     targetEntry.position = toPosition;
     await targetEntry.save();
 
-    // --- EMBED LOG ---
     const guild = interaction.guild;
 
     const embed = new EmbedBuilder()
@@ -171,21 +178,21 @@ module.exports = {
         name: guild.name,
         iconURL: guild.iconURL({ size: 256 })
       })
-      .setTitle('Staff Demotion')
+      .setTitle('Team Demotion')
       .setThumbnail(guild.iconURL({ size: 256 }))
       .addFields(
         { name: 'Team', value: `<@&${teamRoleId}>`, inline: false },
-        { name: 'Old Position', value: `**${oldPosition}**`, inline: false },
-        { name: 'New Position', value: `**${toPosition}**`, inline: false },
-        { name: 'Demoted User', value: `${targetUser.tag}`, inline: false },
-        { name: 'Demoted By', value: `${interaction.user.tag}`, inline: false }
+        { name: 'Old Position', value: `<@&${oldRoleId}> (${pretty(oldPosition)})`, inline: false },
+        { name: 'New Position', value: `<@&${newRoleId}> (${pretty(toPosition)})`, inline: false },
+        { name: 'Demoted User', value: `<@${targetUser.id}>`, inline: false },
+        { name: 'Demoted By', value: `<@${interaction.user.id}>`, inline: false }
       )
       .setTimestamp();
 
     await logAction(client, { embeds: [embed] });
 
     await interaction.reply({
-      content: `${targetUser} has been demoted to **${toPosition}** in **${teamName}**.`
+      content: `<@${targetUser.id}> has been demoted to **${pretty(toPosition)}** in **${teamName}**.`
     });
   }
 };
