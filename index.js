@@ -7,6 +7,7 @@ const connectMongo = require('./utils/mongo');
 
 keepAlive();
 
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
