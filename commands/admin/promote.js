@@ -1,4 +1,8 @@
-const { SlashCommandBuilder } = require('discord.js');
+const {
+  SlashCommandBuilder,
+  EmbedBuilder
+} = require('discord.js');
+
 const {
   PROMOTE_ROLE,
   ASSISTANT_MANAGER_ROLE,
@@ -79,7 +83,7 @@ module.exports = {
     const oldPosition = targetEntry?.position;
     const oldRank = HIERARCHY.indexOf(oldPosition);
 
-    // ⭐ NEW: Prevent promoting to same or lower rank
+    // Prevent promoting to same or lower rank
     if (oldPosition && toRank <= oldRank) {
       return interaction.reply({
         content: `${targetUser} can only be promoted to a HIGHER position.`,
@@ -124,10 +128,31 @@ module.exports = {
 
     saveJSON('staff.json', staff);
 
-    await logAction(
-      client,
-      `⬆️ ${targetUser.tag} was promoted to **${toPosition}** in **${executorEntry.teamName}** by ${interaction.user.tag}.`
-    );
+    // --- EMBED LOG ---
+    const guild = interaction.guild;
+
+    const embed = new EmbedBuilder()
+      .setColor('#2ecc71')
+      .setAuthor({
+        name: guild.name,
+        iconURL: guild.iconURL({ size: 256 })
+      })
+      .setTitle('Staff Promotion')
+      .setThumbnail(
+        executorEntry.emoji && executorEntry.emoji.startsWith('<')
+          ? `https://cdn.discordapp.com/emojis/${executorEntry.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+          : guild.iconURL({ size: 256 }) // fallback
+      )
+      .addFields(
+        { name: 'Team', value: `<@&${executorEntry.teamRoleId}>`, inline: false },
+        { name: 'Old Position', value: oldPosition ? `**${oldPosition}**` : '*None*', inline: true },
+        { name: 'New Position', value: `**${toPosition}**`, inline: true },
+        { name: 'Promoted User', value: `${targetUser.tag}`, inline: false },
+        { name: 'Promoted By', value: `${interaction.user.tag}`, inline: false }
+      )
+      .setTimestamp();
+
+    await logAction(client, { embeds: [embed] });
 
     await interaction.reply({
       content: `${targetUser} has been promoted to **${toPosition}** in **${executorEntry.teamName}**.`
