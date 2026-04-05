@@ -10,17 +10,26 @@ const {
 } = require('../../utils/permissions');
 
 const { logAction } = require('../../utils/logger');
-
-// ⭐ MongoDB Model
 const Staffs = require('../../models/staffs');
 
 const HIERARCHY = ['assistant', 'manager', 'chairman'];
 
+// ⭐ Position → Role ID mapping
 function getStaffRoleId(position) {
   switch (position) {
-    case 'assistant': return ASSISTANT_MANAGER_ROLE;
-    case 'manager': return MANAGER_ROLE;
+    case 'assistant': return '1374495166651437169'; // Assistant Manager
+    case 'manager': return '1374495160632610918';   // Manager
     default: return null;
+  }
+}
+
+// ⭐ Position → Pretty Name
+function pretty(position) {
+  switch (position) {
+    case 'assistant': return 'Assistant Manager';
+    case 'manager': return 'Manager';
+    case 'chairman': return 'Chairman';
+    default: return 'Team Member';
   }
 }
 
@@ -102,7 +111,7 @@ module.exports = {
 
     if (conflicting) {
       return interaction.reply({
-        content: `There is already a **${toPosition}** on this team. Demote them first.`,
+        content: `There is already a **${pretty(toPosition)}** on this team. Demote them first.`,
         ephemeral: true
       });
     }
@@ -127,16 +136,16 @@ module.exports = {
     if (oldRoleId) await guildMember.roles.remove(oldRoleId);
     if (newRoleId) await guildMember.roles.add(newRoleId);
 
-    // --- EMBED LOG ---
     const guild = interaction.guild;
 
+    // --- EMBED LOG ---
     const embed = new EmbedBuilder()
       .setColor('#2ecc71')
       .setAuthor({
         name: guild.name,
         iconURL: guild.iconURL({ size: 256 })
       })
-      .setTitle('Staff Promotion')
+      .setTitle('Team Promotion')
       .setThumbnail(
         executorEntry.emoji && executorEntry.emoji.startsWith('<')
           ? `https://cdn.discordapp.com/emojis/${executorEntry.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
@@ -144,17 +153,17 @@ module.exports = {
       )
       .addFields(
         { name: 'Team', value: `<@&${executorEntry.teamRoleId}>`, inline: false },
-        { name: 'Old Position', value: oldPosition ? `**${oldPosition}**` : '*None*', inline: true },
-        { name: 'New Position', value: `**${toPosition}**`, inline: true },
-        { name: 'Promoted User', value: `${targetUser.tag}`, inline: false },
-        { name: 'Promoted By', value: `${interaction.user.tag}`, inline: false }
+        { name: 'Old Position', value: oldPosition ? `<@&${oldRoleId}> (${pretty(oldPosition)})` : '*None*', inline: true },
+        { name: 'New Position', value: `<@&${newRoleId}> (${pretty(toPosition)})`, inline: true },
+        { name: 'Promoted User', value: `<@${targetUser.id}>`, inline: false },
+        { name: 'Promoted By', value: `<@${interaction.user.id}>`, inline: false }
       )
       .setTimestamp();
 
     await logAction(client, { embeds: [embed] });
 
     await interaction.reply({
-      content: `${targetUser} has been promoted to **${toPosition}** in **${executorEntry.teamName}**.`
+      content: `<@${targetUser.id}> has been promoted to **${pretty(toPosition)}** in **${executorEntry.teamName}**.`
     });
   }
 };
