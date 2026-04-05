@@ -7,67 +7,71 @@ const connectMongo = require('./utils/mongo');
 
 keepAlive();
 
+(async () => {
+  console.log("⏳ Connecting to MongoDB...");
+  await connectMongo(); // ⭐ CONNECT FIRST — BEFORE ANY MODELS LOAD
+  console.log("✅ MongoDB Connected");
 
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages
-  ]
-});
+  // ⭐ CLIENT SETUP
+  const client = new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMembers,
+      GatewayIntentBits.GuildMessages
+    ]
+  });
 
-client.commands = new Collection();
-const commandsData = [];
+  client.commands = new Collection();
+  const commandsData = [];
 
-// ⭐ LOAD COMMANDS FIRST (loads models BEFORE connecting)
-function loadCommands(dir) {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      loadCommands(fullPath);
-    } else if (entry.name.endsWith('.js')) {
-      const command = require(fullPath);
-      if (command.data && command.execute) {
-        client.commands.set(command.data.name, command);
-        commandsData.push(command.data.toJSON());
+  // ⭐ LOAD COMMANDS (models load AFTER Mongo is ready)
+  function loadCommands(dir) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        loadCommands(fullPath);
+      } else if (entry.name.endsWith('.js')) {
+        const command = require(fullPath);
+        if (command.data && command.execute) {
+          client.commands.set(command.data.name, command);
+          commandsData.push(command.data.toJSON());
+        }
       }
     }
   }
-}
 
-loadCommands(path.join(__dirname, 'commands'));
+  loadCommands(path.join(__dirname, 'commands'));
 
-// ⭐ LOAD EVENTS
-const eventsDir = path.join(__dirname, 'events');
-for (const file of fs.readdirSync(eventsDir).filter(f => f.endsWith('.js'))) {
-  const event = require(path.join(eventsDir, file));
-  if (event.once) {
-    client.once(event.name, (...args) => event.execute(...args, client));
-  } else {
-    client.on(event.name, (...args) => event.execute(...args, client));
+  // ⭐ LOAD EVENTS
+  const eventsDir = path.join(__dirname, 'events');
+  for (const file of fs.readdirSync(eventsDir).filter(f => f.endsWith('.js'))) {
+    const event = require(path.join(eventsDir, file));
+    if (event.once) {
+      client.once(event.name, (...args) => event.execute(...args, client));
+    } else {
+      client.on(event.name, (...args) => event.execute(...args, client));
+    }
   }
-}
 
-// ⭐ CONNECT TO MONGO AFTER MODELS ARE LOADED
-connectMongo();
+  // ⭐ READY EVENT
+  client.once('ready', async () => {
+    console.log(`🤖 Logged in as ${client.user.tag}`);
 
-client.once('ready', async () => {
-  console.log(`Logged in as ${client.user.tag}`);
+    const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
-  const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+    try {
+      console.log('🌍 Registering slash commands globally...');
+      await rest.put(
+        Routes.applicationCommands(client.user.id),
+        { body: commandsData }
+      );
+      console.log('✅ Slash commands registered successfully.');
+    } catch (err) {
+      console.error('❌ Failed to register slash commands:', err);
+    }
+  });
 
-  try {
-    console.log('Registering slash commands globally...');
-    await rest.put(
-      Routes.applicationCommands(client.user.id),
-      { body: commandsData }
-    );
-    console.log('Slash commands registered successfully.');
-  } catch (err) {
-    console.error('Failed to register slash commands:', err);
-  }
-});
-
-console.log("TOKEN VALUE:", process.env.TOKEN);
-client.login(process.env.TOKEN);
+  console.log("🔑 Logging in bot...");
+  client.login(process.env.TOKEN);
+})();
