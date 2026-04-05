@@ -5,7 +5,6 @@ const {
   EmbedBuilder
 } = require('discord.js');
 
-
 const { ADD_TEAM_ROLE } = require('../../utils/permissions');
 const { logAction } = require('../../utils/logger');
 
@@ -119,7 +118,7 @@ module.exports = {
         .addFields(
           { name: 'Team', value: `${emoji} <@&${role.id}>`, inline: false },
           { name: 'Division', value: `**${divisionName}**`, inline: false },
-          { name: 'Added By', value: `${interaction.user.tag}`, inline: false }
+          { name: 'Added By', value: `<@${interaction.user.id}>`, inline: false } // ⭐ PINGS USER
         )
         .setTimestamp();
 
