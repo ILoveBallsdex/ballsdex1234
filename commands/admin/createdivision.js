@@ -3,11 +3,8 @@ const {
   EmbedBuilder
 } = require('discord.js');
 
-
 const { CREATE_DIVISION_ROLE } = require('../../utils/permissions');
 const { logAction } = require('../../utils/logger');
-
-// ⭐ MongoDB Model
 const Divisions = require('../../models/divisions');
 
 module.exports = {
@@ -38,17 +35,21 @@ module.exports = {
     ) {
       return interaction.reply({
         content: 'You do not have permission to use this command.',
-        ephemeral: true
+        flags: 64
       });
     }
     // -------------------------
 
-    // ⭐ Normalize name (fixes EPL issue)
-    let name = interaction.options.getString('name').trim();
-    name = name.replace(/\s+/g, ' '); // collapse double spaces
+    // ⭐ FULL UNICODE‑SAFE NORMALIZATION (fixes EPL bug permanently)
+    let name = interaction.options.getString('name')
+      .normalize("NFKD")
+      .replace(/[\u200B-\u200D\uFEFF]/g, '') // remove zero‑width chars
+      .replace(/\s+/g, ' ')                 // collapse spaces
+      .trim();
+
     const emoji = interaction.options.getString('emoji');
 
-    // ⭐ Duplicate check (case-insensitive, normalized)
+    // ⭐ Duplicate check (case‑insensitive)
     const existing = await Divisions.findOne({
       name: { $regex: new RegExp(`^${name}$`, 'i') }
     });
@@ -56,11 +57,11 @@ module.exports = {
     if (existing) {
       return interaction.reply({
         content: `A division named **${name}** already exists.`,
-        ephemeral: true
+        flags: 64
       });
     }
 
-    // ⭐ Save division to MongoDB
+    // ⭐ Save division
     await Divisions.create({ name, emoji });
 
     // --- EMBED LOG ---
@@ -87,7 +88,6 @@ module.exports = {
 
     await logAction(client, { embeds: [embed] });
 
-    // User confirmation
     await interaction.reply({
       content: `Division **${emoji} ${name}** has been created.`
     });
