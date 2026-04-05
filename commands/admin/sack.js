@@ -21,7 +21,7 @@ function getStaffRoleId(position) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('sack')
-    .setDescription('Removes a users management position and removes them from their team')
+    .setDescription('Removes a users management position + releases them off their team')
     .addUserOption(opt =>
       opt.setName('user')
         .setDescription('User to sack')
