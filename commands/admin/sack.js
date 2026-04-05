@@ -1,4 +1,8 @@
-const { SlashCommandBuilder } = require('discord.js');
+const {
+  SlashCommandBuilder,
+  EmbedBuilder
+} = require('discord.js');
+
 const {
   SACK_ROLE,
   ASSISTANT_MANAGER_ROLE,
@@ -86,22 +90,41 @@ module.exports = {
     // Fetch guild member
     const member = await interaction.guild.members.fetch(user.id);
 
-    // 🔥 Remove team role
+    // Remove team role
     if (member.roles.cache.has(team.roleId)) {
       await member.roles.remove(team.roleId);
     }
 
-    // 🔥 Remove staff hierarchy role
+    // Remove staff hierarchy role
     const staffRoleId = getStaffRoleId(removed.position);
     if (staffRoleId && member.roles.cache.has(staffRoleId)) {
       await member.roles.remove(staffRoleId);
     }
 
-    // 🔥 Log + reply
-    await logAction(
-      client,
-      `🚫 ${user.tag} was sacked as **${removed.position}** from **${team.name}** by ${interaction.user.tag}.`
-    );
+    // --- EMBED LOG ---
+    const guild = interaction.guild;
+
+    const embed = new EmbedBuilder()
+      .setColor('#e74c3c')
+      .setAuthor({
+        name: guild.name,
+        iconURL: guild.iconURL({ size: 256 })
+      })
+      .setTitle('Staff Member Sacked')
+      .setThumbnail(
+        team.emoji && team.emoji.startsWith('<')
+          ? `https://cdn.discordapp.com/emojis/${team.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+          : guild.iconURL({ size: 256 }) // fallback for unicode emoji
+      )
+      .addFields(
+        { name: 'Team', value: `${team.emoji} <@&${team.roleId}>`, inline: false },
+        { name: 'Position Removed', value: `**${removed.position}**`, inline: true },
+        { name: 'User Sacked', value: `${user.tag}`, inline: false },
+        { name: 'Sacked By', value: `${interaction.user.tag}`, inline: false }
+      )
+      .setTimestamp();
+
+    await logAction(client, { embeds: [embed] });
 
     await interaction.reply({
       content: `${user} has been sacked from **${team.name}** (was **${removed.position}**).`
