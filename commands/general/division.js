@@ -119,7 +119,7 @@ module.exports = {
       .setTitle(`${division.emoji} ${division.name}`)
       .setColor(0x5865f2)
       .setDescription(
-        `### Teams in this division\nA full overview of every team, their management, and player count.`
+        `### Teams in this division\nA full overview of every team, their managers, and number of players.`
       )
       .setTimestamp();
 
@@ -140,10 +140,10 @@ module.exports = {
       embed.addFields({
         name: `${team.emoji} **${team.name}**`,
         value:
-          `> 👑 **Chairman:** ${chairmanText}\n` +
-          `> 🧩 **Manager:** ${managerText}\n` +
-          `> 🎯 **Assistant Manager:** ${assistantText}\n` +
-          `> 👥 **Players:** ${playerCount}`,
+          `> **Chairman:** ${chairmanText}\n` +
+          `> **Manager:** ${managerText}\n` +
+          `> **Assistant Manager:** ${assistantText}\n` +
+          `> **Players:** ${playerCount}`,
         inline: false,
       });
     }
