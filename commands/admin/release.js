@@ -4,8 +4,11 @@ const {
 } = require('discord.js');
 
 const { RELEASE_ROLE } = require('../../utils/permissions');
-const { loadJSON } = require('../../utils/database');
 const { logAction } = require('../../utils/logger');
+
+// ⭐ MongoDB Models
+const Staffs = require('../../models/staffs');
+const Teams = require('../../models/teams');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -24,10 +27,7 @@ module.exports = {
       ? RELEASE_ROLE
       : [RELEASE_ROLE];
 
-    if (
-      allowedRoles.length > 0 &&
-      !allowedRoles.some(roleId => interaction.member.roles.cache.has(roleId))
-    ) {
+    if (!allowedRoles.some(roleId => interaction.member.roles.cache.has(roleId))) {
       return interaction.reply({
         content: 'You do not have permission to use this command.',
         ephemeral: true
@@ -35,8 +35,8 @@ module.exports = {
     }
     // -------------------------
 
-    const staff = loadJSON('staff.json');
-    const staffEntry = staff.find(s => s.userId === interaction.user.id);
+    // ⭐ Load staff entry for executor
+    const staffEntry = await Staffs.findOne({ userId: interaction.user.id });
 
     if (!staffEntry) {
       return interaction.reply({
@@ -45,8 +45,8 @@ module.exports = {
       });
     }
 
-    const teams = loadJSON('teams.json');
-    const team = teams.find(t => t.roleId === staffEntry.teamRoleId);
+    // ⭐ Load team from DB
+    const team = await Teams.findOne({ roleId: staffEntry.teamRoleId });
 
     if (!team) {
       return interaction.reply({
@@ -58,7 +58,7 @@ module.exports = {
     const player = interaction.options.getUser('player');
     const member = await interaction.guild.members.fetch(player.id);
 
-    // Check if player is on this team
+    // ⭐ Check if player is on this team
     if (!member.roles.cache.has(team.roleId)) {
       return interaction.reply({
         content: `${player} is not on **${team.name}**.`,
@@ -66,10 +66,11 @@ module.exports = {
       });
     }
 
-    // BLOCK releasing staff
-    const targetStaffEntry = staff.find(
-      s => s.userId === player.id && s.teamRoleId === team.roleId
-    );
+    // ⭐ BLOCK releasing staff
+    const targetStaffEntry = await Staffs.findOne({
+      userId: player.id,
+      teamRoleId: team.roleId
+    });
 
     if (targetStaffEntry) {
       return interaction.reply({
@@ -78,7 +79,7 @@ module.exports = {
       });
     }
 
-    // SAFE TO RELEASE
+    // ⭐ SAFE TO RELEASE
     await member.roles.remove(team.roleId);
 
     // --- EMBED LOG ---
@@ -94,7 +95,7 @@ module.exports = {
       .setThumbnail(
         team.emoji && team.emoji.startsWith('<')
           ? `https://cdn.discordapp.com/emojis/${team.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
-          : guild.iconURL({ size: 256 }) // fallback for unicode emoji
+          : guild.iconURL({ size: 256 })
       )
       .addFields(
         { name: 'Team', value: `${team.emoji} <@&${team.roleId}>`, inline: false },
