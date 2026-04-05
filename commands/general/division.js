@@ -71,7 +71,7 @@ module.exports = {
     await interaction.reply({
       content: "Select a division to view its teams:",
       components: [row],
-      ephemeral: false, // ⭐ NOW PUBLIC
+      ephemeral: false, // ⭐ PUBLIC
     });
   },
 
@@ -115,11 +115,14 @@ module.exports = {
       });
     }
 
+    // ⭐ Fetch all members to ensure accurate player counts
+    const allMembers = await interaction.guild.members.fetch();
+
     const embed = new EmbedBuilder()
       .setTitle(`${division.emoji} ${division.name}`)
       .setColor(0x5865f2)
       .setDescription(
-        `### Teams in this division\nA full overview of every team, their managers, and number of players.`
+        `### Teams in this division\nA full overview of every team, their management, and player count.`
       )
       .setTimestamp();
 
@@ -134,16 +137,16 @@ module.exports = {
       const managerText = manager ? `<@${manager.userId}>` : "Vacant";
       const assistantText = assistant ? `<@${assistant.userId}>` : "Vacant";
 
-      const role = await interaction.guild.roles.fetch(team.roleId).catch(() => null);
-      const playerCount = role ? role.members.size : 0;
+      // ⭐ Accurate player count: count ALL members with the team role
+      const playerCount = allMembers.filter(m => m.roles.cache.has(team.roleId)).size;
 
       embed.addFields({
         name: `${team.emoji} **${team.name}**`,
         value:
-          `> **Chairman:** ${chairmanText}\n` +
-          `> **Manager:** ${managerText}\n` +
-          `> **Assistant Manager:** ${assistantText}\n` +
-          `> **Players:** ${playerCount}`,
+          `> 👑 **Chairman:** ${chairmanText}\n` +
+          `> 🧩 **Manager:** ${managerText}\n` +
+          `> 🎯 **Assistant Manager:** ${assistantText}\n` +
+          `> 👥 **Players:** ${playerCount}`,
         inline: false,
       });
     }
