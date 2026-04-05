@@ -42,17 +42,19 @@ module.exports = {
     await interaction.reply({
       content: "Choose a team to view its information:",
       components: [row],
-      ephemeral: true
+      ephemeral: false // ⭐ FIXED — must be public or updates will fail
     });
   },
 
   async handleSelect(interaction, client) {
+    await interaction.deferUpdate(); // ⭐ FIXED — prevents “interaction failed”
+
     const teamRoleId = interaction.values[0];
 
     // Load team
     const team = await Teams.findOne({ roleId: teamRoleId });
     if (!team) {
-      return interaction.update({
+      return interaction.editReply({
         content: "This team no longer exists.",
         components: []
       });
@@ -80,7 +82,6 @@ module.exports = {
 
     for (const p of players) {
       const member = allMembers.get(p.userId);
-
       if (!member) continue;
 
       // Determine team-related role
@@ -125,7 +126,7 @@ module.exports = {
       )
       .setTimestamp();
 
-    await interaction.update({
+    await interaction.editReply({
       content: "",
       embeds: [embed],
       components: []
