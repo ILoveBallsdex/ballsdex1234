@@ -56,7 +56,6 @@ module.exports = {
       });
     }
 
-    // Load staff for this team
     const staff = await Staffs.find({ teamRoleId });
 
     const chairman = staff.find(s => s.position === "chairman");
@@ -67,11 +66,10 @@ module.exports = {
     const managerText = manager ? `<@${manager.userId}>` : "Vacant";
     const assistantText = assistant ? `<@${assistant.userId}>` : "Vacant";
 
-    // ⭐ Fetch ONLY members with the team role
-    const role = interaction.guild.roles.cache.get(teamRoleId);
-    const membersWithRole = role ? role.members : new Map();
+    // Fetch all members, then filter by team role
+    const allMembers = await interaction.guild.members.fetch();
+    const membersWithRole = allMembers.filter(m => m.roles.cache.has(teamRoleId));
 
-    // ⭐ Build player list INCLUDING staff with labels
     let playerList = "";
 
     for (const [id, member] of membersWithRole) {
@@ -86,7 +84,6 @@ module.exports = {
 
     if (playerList === "") playerList = "*No players signed yet.*";
 
-    // Thumbnail logic
     const thumbnail = team.emoji && team.emoji.startsWith("<")
       ? `https://cdn.discordapp.com/emojis/${team.emoji.replace(/\D/g, "")}.png?size=256&quality=lossless`
       : interaction.guild.iconURL({ size: 256 });
