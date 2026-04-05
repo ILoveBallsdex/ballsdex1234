@@ -6,8 +6,11 @@ const {
 } = require('discord.js');
 
 const { DISBAND_ROLE } = require('../../utils/permissions');
-const { loadJSON, saveJSON } = require('../../utils/database');
 const { logAction } = require('../../utils/logger');
+
+// ⭐ MongoDB Models
+const Teams = require('../../models/teams');
+const Staffs = require('../../models/staffs');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -21,10 +24,7 @@ module.exports = {
       ? DISBAND_ROLE
       : [DISBAND_ROLE];
 
-    if (
-      allowedRoles.length > 0 &&
-      !allowedRoles.some(roleId => interaction.member.roles.cache.has(roleId))
-    ) {
+    if (!allowedRoles.some(roleId => interaction.member.roles.cache.has(roleId))) {
       return interaction.reply({
         content: 'You do not have permission to use this command.',
         ephemeral: true
@@ -32,7 +32,8 @@ module.exports = {
     }
     // -------------------------
 
-    const teams = loadJSON('teams.json');
+    // ⭐ Load teams from MongoDB
+    const teams = await Teams.find();
 
     if (!teams.length) {
       return interaction.reply({
@@ -69,7 +70,9 @@ module.exports = {
 
     collector.on('collect', async i => {
       const teamRoleId = i.values[0];
-      const team = teams.find(t => t.roleId === teamRoleId);
+
+      // ⭐ Fetch team from DB
+      const team = await Teams.findOne({ roleId: teamRoleId });
 
       if (!team) {
         return i.update({
@@ -97,12 +100,9 @@ module.exports = {
         }
       }
 
-      // ⭐ REMOVE ALL STAFF ENTRIES FOR THIS TEAM
-      const staff = loadJSON('staff.json');
-      const removedStaff = staff.filter(s => s.teamRoleId === team.roleId).length;
-
-      const updatedStaff = staff.filter(s => s.teamRoleId !== team.roleId);
-      saveJSON('staff.json', updatedStaff);
+      // ⭐ REMOVE ALL STAFF ENTRIES FOR THIS TEAM (MongoDB)
+      const removedStaff = await Staffs.countDocuments({ teamRoleId: team.roleId });
+      await Staffs.deleteMany({ teamRoleId: team.roleId });
 
       // --- EMBED LOG ---
       const embed = new EmbedBuilder()
