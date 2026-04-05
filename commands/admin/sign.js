@@ -65,7 +65,7 @@ module.exports = {
 
     if (alreadyOnTeam) {
       return interaction.reply({
-        content: `${player} is already on **${alreadyOnTeam.name}**!`,
+        content: `<@${player.id}> is already on **${alreadyOnTeam.name}**!`,
         ephemeral: true
       });
     }
@@ -73,9 +73,9 @@ module.exports = {
     // ⭐ SIGN PLAYER
     await member.roles.add(team.roleId);
 
-    // --- EMBED LOG ---
     const guild = interaction.guild;
 
+    // --- LOG EMBED (PING USERS) ---
     const logEmbed = new EmbedBuilder()
       .setColor('#00AEEF')
       .setAuthor({
@@ -90,27 +90,38 @@ module.exports = {
       )
       .addFields(
         { name: 'Team', value: `${team.emoji} <@&${team.roleId}>`, inline: false },
-        { name: 'Signed Player', value: `${player.tag}`, inline: false },
-        { name: 'Signed By', value: `${interaction.user.tag}`, inline: false }
+        { name: 'Signed Player', value: `<@${player.id}>`, inline: false },
+        { name: 'Signed By', value: `<@${interaction.user.id}>`, inline: false }
       )
       .setTimestamp();
 
     await logAction(client, { embeds: [logEmbed] });
 
     await interaction.reply({
-      content: `${player} has been signed to **${team.name}**.`
+      content: `<@${player.id}> has been signed to **${team.name}**.`
     });
 
     // --- DM TO PLAYER ---
     const dmEmbed = new EmbedBuilder()
-      .setTitle(`You have been signed!`)
-      .setDescription(`You have been signed to ${team.emoji} **${team.name}**.`)
       .setColor('#00AEEF')
+      .setAuthor({
+        name: 'League Notification',
+        iconURL: guild.iconURL({ size: 256 }) // league logo top-left
+      })
+      .setTitle('You Have Been Signed!')
+      .setThumbnail(
+        team.emoji && team.emoji.startsWith('<')
+          ? `https://cdn.discordapp.com/emojis/${team.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+          : guild.iconURL({ size: 256 }) // fallback
+      )
+      .setDescription(
+        `You have been signed to ${team.emoji} **${team.name}** in the **${guild.name} League**.`
+      )
       .setTimestamp();
 
     const forceBtn = new ButtonBuilder()
       .setCustomId(`force_sign_${team.roleId}_${Date.now()}`)
-      .setLabel('Was this a force signing?')
+      .setLabel('I was Forced to Sign for this Team')
       .setStyle(ButtonStyle.Danger);
 
     const row = new ActionRowBuilder().addComponents(forceBtn);
@@ -140,13 +151,36 @@ module.exports = {
           });
         }
 
-        // Remove the team role
+        // ⭐ Remove the team role
         await member.roles.remove(team.roleId);
 
         await btnInteraction.reply({
           content: `Your signing to **${team.name}** has been revoked.`,
           ephemeral: true
         });
+
+        // ⭐ LOG FORCED SIGNING
+        const forcedEmbed = new EmbedBuilder()
+          .setColor('#e74c3c')
+          .setAuthor({
+            name: guild.name,
+            iconURL: guild.iconURL({ size: 256 })
+          })
+          .setTitle('Forced Signing Reported')
+          .setThumbnail(
+            team.emoji && team.emoji.startsWith('<')
+              ? `https://cdn.discordapp.com/emojis/${team.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+              : guild.iconURL({ size: 256 })
+          )
+          .addFields(
+            { name: 'Team', value: `${team.emoji} <@&${team.roleId}>`, inline: false },
+            { name: 'Player Removed', value: `<@${player.id}>`, inline: false },
+            { name: 'Originally Signed By', value: `<@${interaction.user.id}>`, inline: false },
+            { name: 'Reason', value: '**Player reported forced signing**', inline: false }
+          )
+          .setTimestamp();
+
+        await logAction(client, { embeds: [forcedEmbed] });
 
         // Disable button
         const disabledRow = new ActionRowBuilder().addComponents(
