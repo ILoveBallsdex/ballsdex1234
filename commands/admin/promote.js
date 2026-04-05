@@ -9,8 +9,10 @@ const {
   MANAGER_ROLE
 } = require('../../utils/permissions');
 
-const { loadJSON, saveJSON } = require('../../utils/database');
 const { logAction } = require('../../utils/logger');
+
+// ⭐ MongoDB Model
+const Staffs = require('../../models/staffs');
 
 const HIERARCHY = ['assistant', 'manager', 'chairman'];
 
@@ -53,9 +55,8 @@ module.exports = {
     const targetUser = interaction.options.getUser('user');
     const toPosition = interaction.options.getString('to');
 
-    const staff = loadJSON('staff.json');
-
-    const executorEntry = staff.find(s => s.userId === interaction.user.id);
+    // ⭐ Load executor staff entry
+    const executorEntry = await Staffs.findOne({ userId: interaction.user.id });
     if (!executorEntry) {
       return interaction.reply({ content: 'You are not a staff member of any team.', ephemeral: true });
     }
@@ -63,27 +64,28 @@ module.exports = {
     const executorRank = HIERARCHY.indexOf(executorEntry.position);
     const toRank = HIERARCHY.indexOf(toPosition);
 
-    // Must outrank the position being assigned
+    // ⭐ Must outrank the position being assigned
     if (executorRank <= toRank) {
       return interaction.reply({ content: 'You cannot assign a position equal to or above your own.', ephemeral: true });
     }
 
     const guildMember = await interaction.guild.members.fetch(targetUser.id);
 
-    // Must be on the same team
+    // ⭐ Must be on the same team
     if (!guildMember.roles.cache.has(executorEntry.teamRoleId)) {
       return interaction.reply({ content: `${targetUser} is not on your team.`, ephemeral: true });
     }
 
-    // Find existing staff entry
-    let targetEntry = staff.find(
-      s => s.userId === targetUser.id && s.teamRoleId === executorEntry.teamRoleId
-    );
+    // ⭐ Find existing staff entry
+    let targetEntry = await Staffs.findOne({
+      userId: targetUser.id,
+      teamRoleId: executorEntry.teamRoleId
+    });
 
     const oldPosition = targetEntry?.position;
     const oldRank = HIERARCHY.indexOf(oldPosition);
 
-    // Prevent promoting to same or lower rank
+    // ⭐ Prevent promoting to same or lower rank
     if (oldPosition && toRank <= oldRank) {
       return interaction.reply({
         content: `${targetUser} can only be promoted to a HIGHER position.`,
@@ -91,13 +93,12 @@ module.exports = {
       });
     }
 
-    // Prevent duplicate positions
-    const conflicting = staff.find(
-      s =>
-        s.teamRoleId === executorEntry.teamRoleId &&
-        s.position === toPosition &&
-        s.userId !== targetUser.id
-    );
+    // ⭐ Prevent duplicate positions
+    const conflicting = await Staffs.findOne({
+      teamRoleId: executorEntry.teamRoleId,
+      position: toPosition,
+      userId: { $ne: targetUser.id }
+    });
 
     if (conflicting) {
       return interaction.reply({
@@ -106,27 +107,25 @@ module.exports = {
       });
     }
 
-    // Create or update staff entry
+    // ⭐ Create or update staff entry
     if (!targetEntry) {
-      targetEntry = {
+      targetEntry = await Staffs.create({
         userId: targetUser.id,
         teamRoleId: executorEntry.teamRoleId,
         teamName: executorEntry.teamName,
         position: toPosition
-      };
-      staff.push(targetEntry);
+      });
     } else {
       targetEntry.position = toPosition;
+      await targetEntry.save();
     }
 
-    // Apply role changes
+    // ⭐ Apply role changes
     const oldRoleId = getStaffRoleId(oldPosition);
     const newRoleId = getStaffRoleId(toPosition);
 
     if (oldRoleId) await guildMember.roles.remove(oldRoleId);
     if (newRoleId) await guildMember.roles.add(newRoleId);
-
-    saveJSON('staff.json', staff);
 
     // --- EMBED LOG ---
     const guild = interaction.guild;
@@ -141,7 +140,7 @@ module.exports = {
       .setThumbnail(
         executorEntry.emoji && executorEntry.emoji.startsWith('<')
           ? `https://cdn.discordapp.com/emojis/${executorEntry.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
-          : guild.iconURL({ size: 256 }) // fallback
+          : guild.iconURL({ size: 256 })
       )
       .addFields(
         { name: 'Team', value: `<@&${executorEntry.teamRoleId}>`, inline: false },
