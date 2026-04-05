@@ -7,7 +7,11 @@ const {
 } = require("discord.js");
 
 const { DIVISION_ROLE } = require("../../utils/permissions");
-const { loadJSON } = require("../../utils/database");
+
+// ⭐ MongoDB Models
+const Divisions = require("../../models/divisions");
+const Teams = require("../../models/teams");
+const Staffs = require("../../models/staffs");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -29,7 +33,8 @@ module.exports = {
       });
     }
 
-    const divisions = loadJSON("divisions.json");
+    // ⭐ Load divisions from MongoDB
+    const divisions = await Divisions.find();
 
     if (divisions.length === 0) {
       return interaction.reply({
@@ -73,8 +78,9 @@ module.exports = {
     }
 
     const divisionName = interaction.values[0];
-    const divisions = loadJSON("divisions.json");
-    const division = divisions.find((d) => d.name === divisionName);
+
+    // ⭐ Load division from DB
+    const division = await Divisions.findOne({ name: divisionName });
 
     if (!division) {
       return interaction.reply({
@@ -82,10 +88,9 @@ module.exports = {
       });
     }
 
-    const teams = loadJSON("teams.json").filter(
-      (t) => t.division === divisionName
-    );
-    const staff = loadJSON("staff.json");
+    // ⭐ Load teams + staff from DB
+    const teams = await Teams.find({ division: divisionName });
+    const staff = await Staffs.find();
 
     if (teams.length === 0) {
       return interaction.update({
@@ -113,7 +118,7 @@ module.exports = {
       const managerText = manager ? `<@${manager.userId}>` : "Vacant";
       const assistantText = assistant ? `<@${assistant.userId}>` : "Vacant";
 
-      // ⭐ FIXED: ALWAYS FETCH ROLE (not cache)
+      // ⭐ ALWAYS FETCH ROLE (fresh)
       const role = await interaction.guild.roles.fetch(team.roleId).catch(() => null);
       const playerCount = role ? role.members.size : 0;
 
