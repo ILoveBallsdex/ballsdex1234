@@ -1,7 +1,6 @@
 const {
   SlashCommandBuilder,
   StringSelectMenuBuilder,
-  StringSelectMenuOptionBuilder,
   ActionRowBuilder,
   EmbedBuilder
 } = require("discord.js");
@@ -16,7 +15,6 @@ module.exports = {
 
   async execute(interaction, client) {
 
-    // Load all teams
     const teams = await Teams.find();
     if (!teams.length) {
       return interaction.reply({
@@ -25,7 +23,6 @@ module.exports = {
       });
     }
 
-    // Build dropdown
     const menu = new StringSelectMenuBuilder()
       .setCustomId("teaminfo-select")
       .setPlaceholder("Select a team...")
@@ -42,16 +39,15 @@ module.exports = {
     await interaction.reply({
       content: "Choose a team to view its information:",
       components: [row],
-      ephemeral: false // ⭐ MUST be public
+      ephemeral: false
     });
   },
 
   async handleSelect(interaction, client) {
-    await interaction.deferUpdate(); // ⭐ Prevents interaction failure
+    await interaction.deferUpdate();
 
     const teamRoleId = interaction.values[0];
 
-    // Load team
     const team = await Teams.findOne({ roleId: teamRoleId });
     if (!team) {
       return interaction.editReply({
@@ -60,7 +56,6 @@ module.exports = {
       });
     }
 
-    // Load staff
     const staff = await Staffs.find({ teamRoleId });
 
     const chairman = staff.find(s => s.position === "chairman");
@@ -71,30 +66,25 @@ module.exports = {
     const managerText = manager ? `<@${manager.userId}>` : "Vacant";
     const assistantText = assistant ? `<@${assistant.userId}>` : "Vacant";
 
-    // Fetch all guild members for accurate player list
-    const allMembers = await interaction.guild.members.fetch();
-
-    // Players stored in DB (from /sign)
-    const players = team.players || [];
-
-    // Build player list (names only)
+    // Build player list WITHOUT fetching entire guild
     let playerList = "";
 
-    for (const p of players) {
-      const member = allMembers.get(p.userId);
-      if (!member) continue;
+    for (const p of team.players || []) {
+      const member = await interaction.guild.members
+        .fetch(p.userId)
+        .catch(() => null);
 
-      playerList += `• <@${p.userId}>\n`;
+      if (member) {
+        playerList += `• <@${p.userId}>\n`;
+      }
     }
 
     if (playerList === "") playerList = "*No players signed yet.*";
 
-    // Team emoji → thumbnail
     const thumbnail = team.emoji && team.emoji.startsWith("<")
       ? `https://cdn.discordapp.com/emojis/${team.emoji.replace(/\D/g, "")}.png?size=256&quality=lossless`
       : interaction.guild.iconURL({ size: 256 });
 
-    // Build embed
     const embed = new EmbedBuilder()
       .setColor("#3498db")
       .setAuthor({
