@@ -56,7 +56,7 @@ module.exports = {
       });
     }
 
-    // Load staff
+    // Load staff for this team
     const staff = await Staffs.find({ teamRoleId });
 
     const chairman = staff.find(s => s.position === "chairman");
@@ -67,22 +67,21 @@ module.exports = {
     const managerText = manager ? `<@${manager.userId}>` : "Vacant";
     const assistantText = assistant ? `<@${assistant.userId}>` : "Vacant";
 
-    // ⭐ Fetch ONLY members with the team role (no rate limits)
+    // ⭐ Fetch ONLY members with the team role
     const role = interaction.guild.roles.cache.get(teamRoleId);
     const membersWithRole = role ? role.members : new Map();
 
-    // ⭐ Build player list INCLUDING staff
+    // ⭐ Build player list INCLUDING staff with labels
     let playerList = "";
 
     for (const [id, member] of membersWithRole) {
-      let label = "";
+      let label = "(Player)";
 
-      if (chairman && chairman.userId === id) label = " (Chairman)";
-      else if (manager && manager.userId === id) label = " (Manager)";
-      else if (assistant && assistant.userId === id) label = " (Assistant Manager)";
-      else label = ""; // normal player
+      if (chairman && chairman.userId === id) label = "(Chairman)";
+      else if (manager && manager.userId === id) label = "(Manager)";
+      else if (assistant && assistant.userId === id) label = "(Assistant Manager)";
 
-      playerList += `• <@${id}>${label}\n`;
+      playerList += `• <@${id}> ${label}\n`;
     }
 
     if (playerList === "") playerList = "*No players signed yet.*";
