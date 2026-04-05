@@ -1,4 +1,8 @@
-const { SlashCommandBuilder } = require('discord.js');
+const {
+  SlashCommandBuilder,
+  EmbedBuilder
+} = require('discord.js');
+
 const { RELEASE_ROLE } = require('../../utils/permissions');
 const { loadJSON } = require('../../utils/database');
 const { logAction } = require('../../utils/logger');
@@ -15,7 +19,7 @@ module.exports = {
 
   async execute(interaction, client) {
 
-    // --- PERMISSION CHECK (supports single or multiple role IDs) ---
+    // --- PERMISSION CHECK ---
     const allowedRoles = Array.isArray(RELEASE_ROLE)
       ? RELEASE_ROLE
       : [RELEASE_ROLE];
@@ -29,7 +33,7 @@ module.exports = {
         ephemeral: true
       });
     }
-    // -----------------------------------------------------------------
+    // -------------------------
 
     const staff = loadJSON('staff.json');
     const staffEntry = staff.find(s => s.userId === interaction.user.id);
@@ -62,7 +66,7 @@ module.exports = {
       });
     }
 
-    // 🔒 BLOCK RELEASING STAFF (assistant / manager / chairman)
+    // BLOCK releasing staff
     const targetStaffEntry = staff.find(
       s => s.userId === player.id && s.teamRoleId === team.roleId
     );
@@ -74,13 +78,32 @@ module.exports = {
       });
     }
 
-    // ✅ SAFE TO RELEASE (not staff)
+    // SAFE TO RELEASE
     await member.roles.remove(team.roleId);
 
-    await logAction(
-      client,
-      `📤 ${player.tag} was released from **${team.name}** by ${interaction.user.tag}.`
-    );
+    // --- EMBED LOG ---
+    const guild = interaction.guild;
+
+    const embed = new EmbedBuilder()
+      .setColor('#9b59b6')
+      .setAuthor({
+        name: guild.name,
+        iconURL: guild.iconURL({ size: 256 })
+      })
+      .setTitle('Player Released')
+      .setThumbnail(
+        team.emoji && team.emoji.startsWith('<')
+          ? `https://cdn.discordapp.com/emojis/${team.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+          : guild.iconURL({ size: 256 }) // fallback for unicode emoji
+      )
+      .addFields(
+        { name: 'Team', value: `${team.emoji} <@&${team.roleId}>`, inline: false },
+        { name: 'Released Player', value: `${player.tag}`, inline: false },
+        { name: 'Released By', value: `${interaction.user.tag}`, inline: false }
+      )
+      .setTimestamp();
+
+    await logAction(client, { embeds: [embed] });
 
     await interaction.reply({
       content: `${player} has been released from **${team.name}**.`
