@@ -6,8 +6,11 @@ const {
 } = require('discord.js');
 
 const { REMOVE_TEAM_ROLE } = require('../../utils/permissions');
-const { loadJSON, saveJSON } = require('../../utils/database');
 const { logAction } = require('../../utils/logger');
+
+// ⭐ MongoDB Models
+const Teams = require('../../models/teams');
+const Staffs = require('../../models/staffs');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -21,10 +24,7 @@ module.exports = {
       ? REMOVE_TEAM_ROLE
       : [REMOVE_TEAM_ROLE];
 
-    if (
-      allowedRoles.length > 0 &&
-      !allowedRoles.some(roleId => interaction.member.roles.cache.has(roleId))
-    ) {
+    if (!allowedRoles.some(roleId => interaction.member.roles.cache.has(roleId))) {
       return interaction.reply({
         content: 'You do not have permission to use this command.',
         ephemeral: true
@@ -32,7 +32,8 @@ module.exports = {
     }
     // -------------------------
 
-    const teams = loadJSON('teams.json');
+    // ⭐ Load teams from MongoDB
+    const teams = await Teams.find();
 
     if (!teams.length) {
       return interaction.reply({
@@ -69,25 +70,23 @@ module.exports = {
 
     collector.on('collect', async i => {
       const teamRoleId = i.values[0];
-      const teams = loadJSON('teams.json');
-      const index = teams.findIndex(t => t.roleId === teamRoleId);
 
-      if (index === -1) {
+      // ⭐ Fetch team from DB
+      const team = await Teams.findOne({ roleId: teamRoleId });
+
+      if (!team) {
         return i.update({
           content: 'This team no longer exists.',
           components: []
         });
       }
 
-      const [removed] = teams.splice(index, 1);
-      saveJSON('teams.json', teams);
+      // ⭐ Remove team from DB
+      await Teams.deleteOne({ roleId: teamRoleId });
 
-      // Remove all staff entries for this team
-      const staff = loadJSON('staff.json');
-      const removedStaff = staff.filter(s => s.teamRoleId === removed.roleId).length;
-
-      const updatedStaff = staff.filter(s => s.teamRoleId !== removed.roleId);
-      saveJSON('staff.json', updatedStaff);
+      // ⭐ Remove all staff entries for this team
+      const removedStaff = await Staffs.countDocuments({ teamRoleId });
+      await Staffs.deleteMany({ teamRoleId });
 
       // --- EMBED LOG ---
       const guild = interaction.guild;
@@ -100,12 +99,12 @@ module.exports = {
         })
         .setTitle('Team Removed')
         .setThumbnail(
-          removed.emoji && removed.emoji.startsWith('<')
-            ? `https://cdn.discordapp.com/emojis/${removed.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+          team.emoji && team.emoji.startsWith('<')
+            ? `https://cdn.discordapp.com/emojis/${team.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
             : guild.iconURL({ size: 256 })
         )
         .addFields(
-          { name: 'Team', value: `${removed.emoji} **${removed.name}**`, inline: false },
+          { name: 'Team', value: `${team.emoji} **${team.name}**`, inline: false },
           { name: 'Staff Removed', value: `**${removedStaff}**`, inline: true },
           { name: 'Removed By', value: `${interaction.user.tag}`, inline: false }
         )
@@ -114,7 +113,7 @@ module.exports = {
       await logAction(client, { embeds: [embed] });
 
       await i.update({
-        content: `Team **${removed.emoji} ${removed.name}** has been removed.`,
+        content: `Team **${team.emoji} ${team.name}** has been removed.`,
         components: []
       });
     });
