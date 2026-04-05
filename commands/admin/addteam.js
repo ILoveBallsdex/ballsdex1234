@@ -95,16 +95,22 @@ module.exports = {
       saveJSON('teams.json', teams);
 
       // --- EMBED LOG ---
+      const guild = interaction.guild;
+
       const embed = new EmbedBuilder()
         .setColor('#2ecc71')
+        .setAuthor({
+          name: guild.name,
+          iconURL: guild.iconURL({ size: 256 })
+        })
         .setTitle('Team Added')
         .setThumbnail(
           emoji.startsWith('<')
             ? `https://cdn.discordapp.com/emojis/${emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
-            : null
+            : guild.iconURL({ size: 256 }) // fallback if unicode emoji
         )
         .addFields(
-          { name: 'Team', value: `${emoji} **${role.name}**`, inline: false },
+          { name: 'Team', value: `${emoji} <@&${role.id}>`, inline: false },
           { name: 'Division', value: `**${division.name}**`, inline: false },
           { name: 'Added By', value: `${interaction.user.tag}`, inline: false }
         )
