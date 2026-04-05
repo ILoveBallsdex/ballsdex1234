@@ -42,12 +42,12 @@ module.exports = {
     await interaction.reply({
       content: "Choose a team to view its information:",
       components: [row],
-      ephemeral: false // ⭐ FIXED — must be public or updates will fail
+      ephemeral: false // ⭐ MUST be public
     });
   },
 
   async handleSelect(interaction, client) {
-    await interaction.deferUpdate(); // ⭐ FIXED — prevents “interaction failed”
+    await interaction.deferUpdate(); // ⭐ Prevents interaction failure
 
     const teamRoleId = interaction.values[0];
 
@@ -77,29 +77,14 @@ module.exports = {
     // Players stored in DB (from /sign)
     const players = team.players || [];
 
-    // Build player list
+    // Build player list (names only)
     let playerList = "";
 
     for (const p of players) {
       const member = allMembers.get(p.userId);
       if (!member) continue;
 
-      // Determine team-related role
-      let roleLabel = "Team Player";
-
-      const staffEntry = staff.find(s => s.userId === p.userId);
-      if (staffEntry) {
-        if (staffEntry.position === "chairman") roleLabel = "Chairman";
-        if (staffEntry.position === "manager") roleLabel = "Manager";
-        if (staffEntry.position === "assistant") roleLabel = "Assistant Manager";
-      }
-
-      const signedBy = p.signedBy ? `<@${p.signedBy}>` : "Unknown";
-      const signedAt = p.signedAt
-        ? `<t:${Math.floor(p.signedAt / 1000)}:R>`
-        : "Unknown";
-
-      playerList += `• <@${p.userId}> — **${roleLabel}**\n   Signed by: ${signedBy} (${signedAt})\n`;
+      playerList += `• <@${p.userId}>\n`;
     }
 
     if (playerList === "") playerList = "*No players signed yet.*";
