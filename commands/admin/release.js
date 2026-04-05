@@ -61,7 +61,7 @@ module.exports = {
     // ⭐ Check if player is on this team
     if (!member.roles.cache.has(team.roleId)) {
       return interaction.reply({
-        content: `${player} is not on **${team.name}**.`,
+        content: `<@${player.id}> is not on **${team.name}**.`,
         ephemeral: true
       });
     }
@@ -74,7 +74,7 @@ module.exports = {
 
     if (targetStaffEntry) {
       return interaction.reply({
-        content: `Demote ${player} from their **${targetStaffEntry.position}** role in order to release them.`,
+        content: `Demote <@${player.id}> from their **${targetStaffEntry.position}** role before releasing them.`,
         ephemeral: true
       });
     }
@@ -82,9 +82,9 @@ module.exports = {
     // ⭐ SAFE TO RELEASE
     await member.roles.remove(team.roleId);
 
-    // --- EMBED LOG ---
     const guild = interaction.guild;
 
+    // --- EMBED LOG ---
     const embed = new EmbedBuilder()
       .setColor('#9b59b6')
       .setAuthor({
@@ -99,15 +99,16 @@ module.exports = {
       )
       .addFields(
         { name: 'Team', value: `${team.emoji} <@&${team.roleId}>`, inline: false },
-        { name: 'Released Player', value: `${player.tag}`, inline: false },
-        { name: 'Released By', value: `${interaction.user.tag}`, inline: false }
+        { name: 'Released Player', value: `<@${player.id}>`, inline: false },
+        { name: 'Released By', value: `<@${interaction.user.id}>`, inline: false }
       )
       .setTimestamp();
 
     await logAction(client, { embeds: [embed] });
 
+    // User confirmation
     await interaction.reply({
-      content: `${player} has been released from **${team.name}**.`
+      content: `<@${player.id}> has been released from **${team.name}**.`
     });
   }
 };
