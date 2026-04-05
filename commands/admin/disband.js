@@ -82,18 +82,19 @@ module.exports = {
       }
 
       await i.update({ content: `Wiping **${team.name}**...`, components: [] });
-      await interaction.followUp({ content: 'Processing...', ephemeral: true });
 
       const guild = interaction.guild;
       const role = guild.roles.cache.get(team.roleId);
 
+      // ⭐ TRACK REMOVED MEMBERS
+      const removedMembers = [];
+
       // ⭐ REMOVE TEAM ROLE FROM EVERY MEMBER
-      let removedPlayers = 0;
       if (role) {
         for (const [, member] of role.members) {
           try {
             await member.roles.remove(team.roleId);
-            removedPlayers++;
+            removedMembers.push(member);
           } catch (err) {
             console.error(`Failed to remove team role from ${member.user.tag}:`, err);
           }
@@ -101,8 +102,20 @@ module.exports = {
       }
 
       // ⭐ REMOVE ALL STAFF ENTRIES FOR THIS TEAM (MongoDB)
-      const removedStaff = await Staffs.countDocuments({ teamRoleId: team.roleId });
+      const staffEntries = await Staffs.find({ teamRoleId: team.roleId });
+      const removedStaff = staffEntries.length;
+
       await Staffs.deleteMany({ teamRoleId: team.roleId });
+
+      // ⭐ Build removal message for players
+      let removalList = removedMembers.length
+        ? removedMembers.map(m => `• <@${m.id}> — removed from **${team.name}**`).join('\n')
+        : '*No players had the role.*';
+
+      // ⭐ Build removal message for staff
+      let staffList = removedStaff
+        ? staffEntries.map(s => `• <@${s.userId}> — removed from **${s.position}**`).join('\n')
+        : '*No staff positions existed.*';
 
       // --- EMBED LOG ---
       const embed = new EmbedBuilder()
@@ -119,16 +132,18 @@ module.exports = {
         )
         .addFields(
           { name: 'Team', value: `${team.emoji} <@&${team.roleId}>`, inline: false },
-          { name: 'Players Removed', value: `**${removedPlayers}**`, inline: true },
-          { name: 'Staff Removed', value: `**${removedStaff}**`, inline: true },
-          { name: 'Wiped By', value: `${interaction.user.tag}`, inline: false }
+          { name: 'Players Removed', value: `${removedMembers.length}`, inline: true },
+          { name: 'Staff Removed', value: `${removedStaff}`, inline: true },
+          { name: 'Wiped By', value: `<@${interaction.user.id}>`, inline: false },
+          { name: 'Players Affected', value: removalList, inline: false },
+          { name: 'Staff Affected', value: staffList, inline: false }
         )
         .setTimestamp();
 
       await logAction(client, { embeds: [embed] });
 
       await interaction.followUp({
-        content: `Team **${team.emoji} ${team.name}** has been wiped. All players and staff removed.`,
+        content: `Team **${team.emoji} ${team.name}** has been wiped.\nAll players and staff removed.\nWiped by <@${interaction.user.id}>.`,
         ephemeral: true
       });
     });
