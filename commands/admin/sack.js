@@ -6,15 +6,17 @@ const {
 } = require('discord.js');
 
 const {
-  
   SACK_ROLE,
   ASSISTANT_MANAGER_ROLE,
   MANAGER_ROLE,
   CHAIRMAN_ROLE
 } = require('../../utils/permissions');
 
-const { loadJSON, saveJSON } = require('../../utils/database');
 const { logAction } = require('../../utils/logger');
+
+// ⭐ MongoDB Models
+const Teams = require('../../models/teams');
+const Staffs = require('../../models/staffs');
 
 function getStaffRoleId(position) {
   switch (position) {
@@ -49,8 +51,8 @@ module.exports = {
 
     const user = interaction.options.getUser('user');
 
-    const teams = loadJSON('teams.json');
-    const staff = loadJSON('staff.json');
+    // ⭐ Load teams from DB
+    const teams = await Teams.find();
 
     if (!teams.length) {
       return interaction.reply({
@@ -87,7 +89,9 @@ module.exports = {
 
     collector.on('collect', async i => {
       const teamRoleId = i.values[0];
-      const team = teams.find(t => t.roleId === teamRoleId);
+
+      // ⭐ Fetch team from DB
+      const team = await Teams.findOne({ roleId: teamRoleId });
 
       if (!team) {
         return i.update({
@@ -96,33 +100,33 @@ module.exports = {
         });
       }
 
-      // Find staff entry
-      const staffIndex = staff.findIndex(
-        s => s.userId === user.id && s.teamRoleId === team.roleId
-      );
+      // ⭐ Find staff entry
+      const staffEntry = await Staffs.findOne({
+        userId: user.id,
+        teamRoleId: team.roleId
+      });
 
-      if (staffIndex === -1) {
+      if (!staffEntry) {
         return i.update({
           content: `${user} is not a staff member of **${team.name}**.`,
           components: []
         });
       }
 
-      const removed = staff[staffIndex];
+      const removed = staffEntry;
 
-      // Remove from staff.json
-      staff.splice(staffIndex, 1);
-      saveJSON('staff.json', staff);
+      // ⭐ Remove staff entry from DB
+      await Staffs.deleteOne({ _id: staffEntry._id });
 
-      // Fetch guild member
+      // ⭐ Fetch guild member
       const member = await interaction.guild.members.fetch(user.id);
 
-      // Remove team role
+      // ⭐ Remove team role
       if (member.roles.cache.has(team.roleId)) {
         await member.roles.remove(team.roleId);
       }
 
-      // Remove staff hierarchy role
+      // ⭐ Remove staff hierarchy role
       const staffRoleId = getStaffRoleId(removed.position);
       if (staffRoleId && member.roles.cache.has(staffRoleId)) {
         await member.roles.remove(staffRoleId);
