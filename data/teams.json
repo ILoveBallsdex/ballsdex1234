@@ -1,0 +1,50 @@
+[
+  {
+    "name": "[-A-] Arsenal",
+    "roleId": "1374495177795702945",
+    "emoji": "<:arsenal:1374497321823506432>",
+    "division": "GFC | Premier League"
+  },
+  {
+    "name": "[-AV-] Aston Villa",
+    "roleId": "1374495214420492368",
+    "emoji": "<:astonvilla:1374497796547416085>",
+    "division": "GFC | Premier League"
+  },
+  {
+    "name": "[-T-] Tottenham",
+    "roleId": "1374495209316024471",
+    "emoji": "<:tottenham:1374497243385823437>",
+    "division": "GFC | Premier League"
+  },
+  {
+    "name": "[-C-] Chelsea",
+    "roleId": "1374495188210290690",
+    "emoji": "<:chelsea:1374497853078245489>",
+    "division": "GFC | Premier League"
+  },
+  {
+    "name": "[-MC-] Manchester City",
+    "roleId": "1374495183038713998",
+    "emoji": "<:manchestercity:1374497678817366086>",
+    "division": "GFC | Premier League"
+  },
+  {
+    "name": "[-NU-] Newcastle United",
+    "roleId": "1374495204052041820",
+    "emoji": "<:newcastleunited:1374497556364791900>",
+    "division": "GFC | Premier League"
+  },
+  {
+    "name": "[-L-] Liverpool",
+    "roleId": "1374495198893314059",
+    "emoji": "<:liverpool:1374497407752081489>",
+    "division": "GFC | Premier League"
+  },
+  {
+    "name": "[-MU-] Manchester United",
+    "roleId": "1374495193788846261",
+    "emoji": "<:manchesterunited:1374497741757091930>",
+    "division": "GFC | Premier League"
+  }
+]
