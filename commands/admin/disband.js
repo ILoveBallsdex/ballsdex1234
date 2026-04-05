@@ -1,6 +1,8 @@
 const {
   SlashCommandBuilder,
-  EmbedBuilder
+  EmbedBuilder,
+  ActionRowBuilder,
+  StringSelectMenuBuilder
 } = require('discord.js');
 
 const { DISBAND_ROLE } = require('../../utils/permissions');
@@ -10,12 +12,7 @@ const { logAction } = require('../../utils/logger');
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('disband')
-    .setDescription('Wipe all players and managers from a team')
-    .addStringOption(opt =>
-      opt.setName('team')
-        .setDescription('Team name')
-        .setRequired(true)
-    ),
+    .setDescription('Wipe all players and managers from a team'),
 
   async execute(interaction, client) {
 
@@ -35,69 +32,114 @@ module.exports = {
     }
     // -------------------------
 
-    const teamName = interaction.options.getString('team');
     const teams = loadJSON('teams.json');
-    const team = teams.find(t => t.name.toLowerCase() === teamName.toLowerCase());
 
-    if (!team) {
+    if (!teams.length) {
       return interaction.reply({
-        content: `No team named **${teamName}** found.`,
+        content: 'There are no teams to disband.',
         ephemeral: true
       });
     }
 
-    await interaction.deferReply();
+    // --- TEAM DROPDOWN ---
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId('disband-team-select')
+      .setPlaceholder('Select a team to wipe')
+      .addOptions(
+        teams.map(t => ({
+          label: t.name,
+          value: t.roleId,
+          emoji: t.emoji || undefined
+        }))
+      );
 
-    const guild = interaction.guild;
-    const role = guild.roles.cache.get(team.roleId);
+    const row = new ActionRowBuilder().addComponents(menu);
 
-    // ⭐ REMOVE TEAM ROLE FROM EVERY MEMBER
-    let removedPlayers = 0;
-    if (role) {
-      for (const [, member] of role.members) {
-        try {
-          await member.roles.remove(team.roleId);
-          removedPlayers++;
-        } catch (err) {
-          console.error(`Failed to remove team role from ${member.user.tag}:`, err);
+    await interaction.reply({
+      content: 'Select the team you want to wipe:',
+      components: [row],
+      ephemeral: true
+    });
+
+    // --- COLLECTOR ---
+    const collector = interaction.channel.createMessageComponentCollector({
+      filter: i => i.customId === 'disband-team-select' && i.user.id === interaction.user.id,
+      time: 15000
+    });
+
+    collector.on('collect', async i => {
+      const teamRoleId = i.values[0];
+      const team = teams.find(t => t.roleId === teamRoleId);
+
+      if (!team) {
+        return i.update({
+          content: 'This team no longer exists.',
+          components: []
+        });
+      }
+
+      await i.update({ content: `Wiping **${team.name}**...`, components: [] });
+      await interaction.followUp({ content: 'Processing...', ephemeral: true });
+
+      const guild = interaction.guild;
+      const role = guild.roles.cache.get(team.roleId);
+
+      // ⭐ REMOVE TEAM ROLE FROM EVERY MEMBER
+      let removedPlayers = 0;
+      if (role) {
+        for (const [, member] of role.members) {
+          try {
+            await member.roles.remove(team.roleId);
+            removedPlayers++;
+          } catch (err) {
+            console.error(`Failed to remove team role from ${member.user.tag}:`, err);
+          }
         }
       }
-    }
 
-    // ⭐ REMOVE ALL STAFF ENTRIES FOR THIS TEAM
-    const staff = loadJSON('staff.json');
-    const removedStaff = staff.filter(s => s.teamRoleId === team.roleId).length;
+      // ⭐ REMOVE ALL STAFF ENTRIES FOR THIS TEAM
+      const staff = loadJSON('staff.json');
+      const removedStaff = staff.filter(s => s.teamRoleId === team.roleId).length;
 
-    const updatedStaff = staff.filter(s => s.teamRoleId !== team.roleId);
-    saveJSON('staff.json', updatedStaff);
+      const updatedStaff = staff.filter(s => s.teamRoleId !== team.roleId);
+      saveJSON('staff.json', updatedStaff);
 
-    // ⭐ DO NOT DELETE THE TEAM — KEEP IT IN teams.json
+      // --- EMBED LOG ---
+      const embed = new EmbedBuilder()
+        .setColor('#c0392b')
+        .setAuthor({
+          name: guild.name,
+          iconURL: guild.iconURL({ size: 256 })
+        })
+        .setTitle('Team Wiped')
+        .setThumbnail(
+          team.emoji && team.emoji.startsWith('<')
+            ? `https://cdn.discordapp.com/emojis/${team.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+            : guild.iconURL({ size: 256 })
+        )
+        .addFields(
+          { name: 'Team', value: `${team.emoji} <@&${team.roleId}>`, inline: false },
+          { name: 'Players Removed', value: `**${removedPlayers}**`, inline: true },
+          { name: 'Staff Removed', value: `**${removedStaff}**`, inline: true },
+          { name: 'Wiped By', value: `${interaction.user.tag}`, inline: false }
+        )
+        .setTimestamp();
 
-    // --- EMBED LOG ---
-    const embed = new EmbedBuilder()
-      .setColor('#c0392b')
-      .setAuthor({
-        name: guild.name,
-        iconURL: guild.iconURL({ size: 256 })
-      })
-      .setTitle('Team Wiped')
-      .setThumbnail(
-        team.emoji && team.emoji.startsWith('<')
-          ? `https://cdn.discordapp.com/emojis/${team.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
-          : guild.iconURL({ size: 256 }) // fallback for unicode emoji
-      )
-      .addFields(
-        { name: 'Team', value: `${team.emoji} <@&${team.roleId}>`, inline: false },
-        { name: 'Players Removed', value: `**${removedPlayers}**`, inline: true },
-        { name: 'Staff Removed', value: `**${removedStaff}**`, inline: true },
-        { name: 'Wiped By', value: `${interaction.user.tag}`, inline: false }
-      )
-      .setTimestamp();
+      await logAction(client, { embeds: [embed] });
 
-    await logAction(client, { embeds: [embed] });
+      await interaction.followUp({
+        content: `Team **${team.emoji} ${team.name}** has been wiped. All players and staff removed.`,
+        ephemeral: true
+      });
+    });
 
-    await interaction.editReply({
-      content: `Team **${team.emoji} ${team.name}** has been wiped. All players and staff have been removed, but the team still exists.`
+    collector.on('end', collected => {
+      if (collected.size === 0) {
+        interaction.editReply({
+          content: 'No team selected. Command cancelled.',
+          components: []
+        });
+      }
     });
   }
 };
