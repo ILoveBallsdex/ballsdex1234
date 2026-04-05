@@ -71,7 +71,7 @@ module.exports = {
     await interaction.reply({
       content: "Select a division to view its teams:",
       components: [row],
-      ephemeral: false, // ⭐ PUBLIC
+      ephemeral: false,
     });
   },
 
@@ -115,9 +115,7 @@ module.exports = {
       });
     }
 
-    // ⭐ Fetch all members to ensure accurate player counts
-    const allMembers = await interaction.guild.members.fetch();
-
+    // ⭐ OPTIMIZED: No full guild fetch — fetch only members with each team role
     const embed = new EmbedBuilder()
       .setTitle(`${division.emoji} ${division.name}`)
       .setColor(0x5865f2)
@@ -137,8 +135,14 @@ module.exports = {
       const managerText = manager ? `<@${manager.userId}>` : "Vacant";
       const assistantText = assistant ? `<@${assistant.userId}>` : "Vacant";
 
-      // ⭐ Accurate player count: count ALL members with the team role
-      const playerCount = allMembers.filter(m => m.roles.cache.has(team.roleId)).size;
+      // ⭐ Fetch ONLY members with this team role (no rate limits)
+      const role = interaction.guild.roles.cache.get(team.roleId);
+      let playerCount = 0;
+
+      if (role) {
+        const membersWithRole = await role.members;
+        playerCount = membersWithRole.size;
+      }
 
       embed.addFields({
         name: `${team.emoji} **${team.name}**`,
