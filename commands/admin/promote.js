@@ -11,25 +11,16 @@ const {
 
 const { logAction } = require('../../utils/logger');
 const Staffs = require('../../models/staffs');
+const Teams = require('../../models/teams'); // ⭐ Needed to fetch team emoji
 
 const HIERARCHY = ['assistant', 'manager', 'chairman'];
 
 // ⭐ Position → Role ID mapping
 function getStaffRoleId(position) {
   switch (position) {
-    case 'assistant': return '1374495166651437169'; // Assistant Manager
-    case 'manager': return '1374495160632610918';   // Manager
+    case 'assistant': return '1374495166651437169';
+    case 'manager': return '1374495160632610918';
     default: return null;
-  }
-}
-
-// ⭐ Position → Pretty Name
-function pretty(position) {
-  switch (position) {
-    case 'assistant': return 'Assistant Manager';
-    case 'manager': return 'Manager';
-    case 'chairman': return 'Chairman';
-    default: return 'Team Member';
   }
 }
 
@@ -59,7 +50,6 @@ module.exports = {
     if (!allowedRoles.some(roleId => interaction.member.roles.cache.has(roleId))) {
       return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
     }
-    // -------------------------
 
     const targetUser = interaction.options.getUser('user');
     const toPosition = interaction.options.getString('to');
@@ -69,6 +59,9 @@ module.exports = {
     if (!executorEntry) {
       return interaction.reply({ content: 'You are not a staff member of any team.', ephemeral: true });
     }
+
+    // ⭐ Load team to get emoji
+    const team = await Teams.findOne({ roleId: executorEntry.teamRoleId });
 
     const executorRank = HIERARCHY.indexOf(executorEntry.position);
     const toRank = HIERARCHY.indexOf(toPosition);
@@ -111,7 +104,7 @@ module.exports = {
 
     if (conflicting) {
       return interaction.reply({
-        content: `There is already a **${pretty(toPosition)}** on this team. Demote them first.`,
+        content: `There is already a **${toPosition}** on this team. Demote them first.`,
         ephemeral: true
       });
     }
@@ -138,10 +131,9 @@ module.exports = {
 
     const guild = interaction.guild;
 
-    // ⭐ FIXED: TEAM LOGO IN TOP RIGHT
-    const teamEmoji = executorEntry.emoji;
-    const teamThumbnail = teamEmoji && teamEmoji.startsWith('<')
-      ? `https://cdn.discordapp.com/emojis/${teamEmoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+    // ⭐ TEAM LOGO IN TOP RIGHT (corrected)
+    const teamThumbnail = team?.emoji && team.emoji.startsWith('<')
+      ? `https://cdn.discordapp.com/emojis/${team.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
       : guild.iconURL({ size: 256 });
 
     // --- EMBED LOG ---
@@ -154,9 +146,9 @@ module.exports = {
       .setTitle('Team Promotion')
       .setThumbnail(teamThumbnail) // ⭐ TEAM LOGO TOP-RIGHT
       .addFields(
-        { name: 'Team', value: `<@&${executorEntry.teamRoleId}>`, inline: false },
-        { name: 'Old Position', value: oldPosition ? `<@&${oldRoleId}> (${pretty(oldPosition)})` : '*None*', inline: true },
-        { name: 'New Position', value: `<@&${newRoleId}> (${pretty(toPosition)})`, inline: true },
+        { name: 'Team', value: `${team.emoji} <@&${executorEntry.teamRoleId}>`, inline: false },
+        { name: 'Old Position', value: oldRoleId ? `<@&${oldRoleId}>` : '*None*', inline: true },
+        { name: 'New Position', value: `<@&${newRoleId}>`, inline: true },
         { name: 'Promoted User', value: `<@${targetUser.id}>`, inline: false },
         { name: 'Promoted By', value: `<@${interaction.user.id}>`, inline: false }
       )
@@ -165,7 +157,7 @@ module.exports = {
     await logAction(client, { embeds: [embed] });
 
     await interaction.reply({
-      content: `<@${targetUser.id}> has been promoted to **${pretty(toPosition)}** in **${executorEntry.teamName}**.`
+      content: `<@${targetUser.id}> has been promoted to <@&${newRoleId}> in **${executorEntry.teamName}**.`
     });
   }
 };
