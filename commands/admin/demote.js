@@ -10,8 +10,10 @@ const {
   CHAIRMAN_ROLE
 } = require('../../utils/permissions');
 
-const { loadJSON, saveJSON } = require('../../utils/database');
 const { logAction } = require('../../utils/logger');
+
+// ⭐ Import MongoDB model
+const Staffs = require('../../models/staffs');
 
 const HIERARCHY = ['assistant', 'manager', 'chairman'];
 
@@ -56,9 +58,8 @@ module.exports = {
     const targetUser = interaction.options.getUser('user');
     const toPosition = interaction.options.getString('to');
 
-    const staff = loadJSON('staff.json');
-
-    const executorEntry = staff.find(s => s.userId === interaction.user.id);
+    // ⭐ Load staff from MongoDB
+    const executorEntry = await Staffs.findOne({ userId: interaction.user.id });
     if (!executorEntry) {
       return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
     }
@@ -68,15 +69,16 @@ module.exports = {
 
     const guildMember = await interaction.guild.members.fetch(targetUser.id);
 
-    // Must be on the same team
+    // ⭐ Must be on the same team
     if (!guildMember.roles.cache.has(executorEntry.teamRoleId)) {
       return interaction.reply({ content: `${targetUser} is not on your team.`, ephemeral: true });
     }
 
-    // Must already be staff
-    const targetEntry = staff.find(
-      s => s.userId === targetUser.id && s.teamRoleId === executorEntry.teamRoleId
-    );
+    // ⭐ Must already be staff
+    const targetEntry = await Staffs.findOne({
+      userId: targetUser.id,
+      teamRoleId: executorEntry.teamRoleId
+    });
 
     if (!targetEntry) {
       return interaction.reply({ content: `${targetUser} is not in a management position on your team.`, ephemeral: true });
@@ -84,12 +86,12 @@ module.exports = {
 
     const targetRank = HIERARCHY.indexOf(targetEntry.position);
 
-    // Executor must outrank the target
+    // ⭐ Executor must outrank the target
     if (executorRank <= targetRank) {
       return interaction.reply({ content: 'You cannot demote someone equal to or above your rank.', ephemeral: true });
     }
 
-    // Prevent selecting a role higher than the target’s current one
+    // ⭐ Prevent selecting a role higher than the target’s current one
     if (toPosition !== 'none' && toRank >= targetRank) {
       return interaction.reply({
         content: `You can only demote ${targetUser} to a LOWER position.`,
@@ -97,19 +99,20 @@ module.exports = {
       });
     }
 
-    // Prevent duplicate positions
-    const conflicting = staff.find(
-      s =>
-        s.teamRoleId === executorEntry.teamRoleId &&
-        s.position === toPosition &&
-        s.userId !== targetUser.id
-    );
-
-    if (toPosition !== 'none' && conflicting) {
-      return interaction.reply({
-        content: `There is already a **${toPosition}** on this team. Remove them first.`,
-        ephemeral: true
+    // ⭐ Prevent duplicate positions
+    if (toPosition !== 'none') {
+      const conflicting = await Staffs.findOne({
+        teamRoleId: executorEntry.teamRoleId,
+        position: toPosition,
+        userId: { $ne: targetUser.id }
       });
+
+      if (conflicting) {
+        return interaction.reply({
+          content: `There is already a **${toPosition}** on this team. Remove them first.`,
+          ephemeral: true
+        });
+      }
     }
 
     // 🔥 REMOVE OLD STAFF ROLE
@@ -120,11 +123,9 @@ module.exports = {
     const teamName = executorEntry.teamName;
     const teamRoleId = executorEntry.teamRoleId;
 
-    // If demoting to normal member
+    // ⭐ If demoting to normal member
     if (toPosition === 'none') {
-      const index = staff.indexOf(targetEntry);
-      staff.splice(index, 1);
-      saveJSON('staff.json', staff);
+      await Staffs.deleteOne({ _id: targetEntry._id });
 
       // --- EMBED LOG ---
       const guild = interaction.guild;
@@ -159,7 +160,7 @@ module.exports = {
 
     // 🔥 UPDATE DATABASE
     targetEntry.position = toPosition;
-    saveJSON('staff.json', staff);
+    await targetEntry.save();
 
     // --- EMBED LOG ---
     const guild = interaction.guild;
