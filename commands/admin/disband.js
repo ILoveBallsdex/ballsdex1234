@@ -6,7 +6,7 @@ const { logAction } = require('../../utils/logger');
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('disband')
-    .setDescription('Wipe all players and staff from a team')
+    .setDescription('Wipe all players and managers from a team')
     .addStringOption(opt =>
       opt.setName('team')
         .setDescription('Team name')
