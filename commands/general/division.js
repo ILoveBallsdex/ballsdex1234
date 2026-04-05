@@ -20,8 +20,8 @@ function escapeRegex(str) {
 function normalizeName(str) {
   return str
     .normalize("NFKD")
-    .replace(/[\u200B-\u200D\uFEFF]/g, '') // zero‑width chars
-    .replace(/\s+/g, ' ')                 // collapse spaces
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -45,7 +45,6 @@ module.exports = {
       });
     }
 
-    // Load divisions
     const divisions = await Divisions.find();
 
     if (divisions.length === 0) {
@@ -55,11 +54,10 @@ module.exports = {
       });
     }
 
-    // Dropdown options
     const options = divisions.map((d) =>
       new StringSelectMenuOptionBuilder()
         .setLabel(d.name)
-        .setValue(d.name) // raw name, normalized later
+        .setValue(d.name)
         .setEmoji(d.emoji)
     );
 
@@ -73,7 +71,7 @@ module.exports = {
     await interaction.reply({
       content: "Select a division to view its teams:",
       components: [row],
-      ephemeral: true,
+      ephemeral: false, // ⭐ PUBLIC NOW
     });
   },
 
@@ -92,12 +90,10 @@ module.exports = {
       });
     }
 
-    // Normalize + escape the selected division name
     const rawName = interaction.values[0];
     const normalizedName = normalizeName(rawName);
     const safeName = escapeRegex(normalizedName);
 
-    // Load division safely
     const division = await Divisions.findOne({
       name: { $regex: new RegExp(`^${safeName}$`, "i") },
     });
@@ -109,7 +105,6 @@ module.exports = {
       });
     }
 
-    // Load teams + staff
     const teams = await Teams.find({ division: division.name });
     const staff = await Staffs.find();
 
@@ -124,7 +119,8 @@ module.exports = {
       .setTitle(`${division.emoji} ${division.name}`)
       .setColor(0x5865f2)
       .setDescription(
-        `### Teams in this division\nA full overview of every team, their management, and player count.`
+        `### Division Overview\nBelow is a full list of teams, their management, and player counts.\n\n` +
+        `**Vacant positions** mean the team is available to claim.`
       )
       .setTimestamp();
 
@@ -135,9 +131,9 @@ module.exports = {
       const manager = teamStaff.find((s) => s.position === "manager");
       const assistant = teamStaff.find((s) => s.position === "assistant");
 
-      const chairmanText = chairman ? `<@${chairman.userId}>` : "Vacant";
-      const managerText = manager ? `<@${manager.userId}>` : "Vacant";
-      const assistantText = assistant ? `<@${assistant.userId}>` : "Vacant";
+      const chairmanText = chairman ? `<@${chairman.userId}>` : "**Vacant**";
+      const managerText = manager ? `<@${manager.userId}>` : "**Vacant**";
+      const assistantText = assistant ? `<@${assistant.userId}>` : "**Vacant**";
 
       const role = await interaction.guild.roles.fetch(team.roleId).catch(() => null);
       const playerCount = role ? role.members.size : 0;
@@ -145,10 +141,10 @@ module.exports = {
       embed.addFields({
         name: `${team.emoji} **${team.name}**`,
         value:
-          `> 👑 **Chairman:** ${chairmanText}\n` +
-          `> 🧩 **Manager:** ${managerText}\n` +
-          `> 🎯 **Assistant Manager:** ${assistantText}\n` +
-          `> 👥 **Players:** ${playerCount}`,
+          `• **Chairman:** ${chairmanText}\n` +
+          `• **Manager:** ${managerText}\n` +
+          `• **Assistant Manager:** ${assistantText}\n` +
+          `• **Players:** ${playerCount}`,
         inline: false,
       });
     }
