@@ -6,8 +6,11 @@ const {
 } = require('discord.js');
 
 const { REMOVE_DIVISION_ROLE } = require('../../utils/permissions');
-const { loadJSON, saveJSON } = require('../../utils/database');
 const { logAction } = require('../../utils/logger');
+
+// ⭐ MongoDB Models
+const Divisions = require('../../models/divisions');
+const Teams = require('../../models/teams');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -21,10 +24,7 @@ module.exports = {
       ? REMOVE_DIVISION_ROLE
       : [REMOVE_DIVISION_ROLE];
 
-    if (
-      allowedRoles.length > 0 &&
-      !allowedRoles.some(roleId => interaction.member.roles.cache.has(roleId))
-    ) {
+    if (!allowedRoles.some(roleId => interaction.member.roles.cache.has(roleId))) {
       return interaction.reply({
         content: 'You do not have permission to use this command.',
         ephemeral: true
@@ -32,7 +32,8 @@ module.exports = {
     }
     // -------------------------
 
-    const divisions = loadJSON('divisions.json');
+    // ⭐ Load divisions from MongoDB
+    const divisions = await Divisions.find();
 
     if (!divisions.length) {
       return interaction.reply({
@@ -69,28 +70,22 @@ module.exports = {
     collector.on('collect', async i => {
       const selectedName = i.values[0];
 
-      // Reload divisions
-      const divisions = loadJSON('divisions.json');
-      const index = divisions.findIndex(d => d.name === selectedName);
+      // ⭐ Reload division from DB
+      const division = await Divisions.findOne({ name: selectedName });
 
-      if (index === -1) {
+      if (!division) {
         return i.update({
           content: `Division **${selectedName}** no longer exists.`,
           components: []
         });
       }
 
-      const [removed] = divisions.splice(index, 1);
-      saveJSON('divisions.json', divisions);
+      // ⭐ Remove division from DB
+      await Divisions.deleteOne({ name: selectedName });
 
-      // Remove all teams inside that division
-      let teams = loadJSON('teams.json');
-      const beforeCount = teams.length;
-
-      teams = teams.filter(t => t.division !== removed.name);
-      saveJSON('teams.json', teams);
-
-      const removedTeams = beforeCount - teams.length;
+      // ⭐ Remove all teams inside that division
+      const removedTeams = await Teams.countDocuments({ division: selectedName });
+      await Teams.deleteMany({ division: selectedName });
 
       // --- EMBED LOG ---
       const guild = interaction.guild;
@@ -103,12 +98,12 @@ module.exports = {
         })
         .setTitle('Division Removed')
         .setThumbnail(
-          removed.emoji && removed.emoji.startsWith('<')
-            ? `https://cdn.discordapp.com/emojis/${removed.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
-            : guild.iconURL({ size: 256 }) // fallback for unicode emoji
+          division.emoji && division.emoji.startsWith('<')
+            ? `https://cdn.discordapp.com/emojis/${division.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+            : guild.iconURL({ size: 256 })
         )
         .addFields(
-          { name: 'Division', value: `${removed.emoji} **${removed.name}**`, inline: false },
+          { name: 'Division', value: `${division.emoji} **${division.name}**`, inline: false },
           { name: 'Teams Removed', value: `**${removedTeams}**`, inline: true },
           { name: 'Removed By', value: `${interaction.user.tag}`, inline: false }
         )
@@ -117,7 +112,7 @@ module.exports = {
       await logAction(client, { embeds: [embed] });
 
       await i.update({
-        content: `Division **${removed.emoji} ${removed.name}** has been removed.\nRemoved **${removedTeams}** teams from that division.`,
+        content: `Division **${division.emoji} ${division.name}** has been removed.\nRemoved **${removedTeams}** teams from that division.`,
         components: []
       });
     });
