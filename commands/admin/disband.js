@@ -1,4 +1,8 @@
-const { SlashCommandBuilder } = require('discord.js');
+const {
+  SlashCommandBuilder,
+  EmbedBuilder
+} = require('discord.js');
+
 const { DISBAND_ROLE } = require('../../utils/permissions');
 const { loadJSON, saveJSON } = require('../../utils/database');
 const { logAction } = require('../../utils/logger');
@@ -48,10 +52,12 @@ module.exports = {
     const role = guild.roles.cache.get(team.roleId);
 
     // ⭐ REMOVE TEAM ROLE FROM EVERY MEMBER
+    let removedPlayers = 0;
     if (role) {
       for (const [, member] of role.members) {
         try {
           await member.roles.remove(team.roleId);
+          removedPlayers++;
         } catch (err) {
           console.error(`Failed to remove team role from ${member.user.tag}:`, err);
         }
@@ -60,16 +66,35 @@ module.exports = {
 
     // ⭐ REMOVE ALL STAFF ENTRIES FOR THIS TEAM
     const staff = loadJSON('staff.json');
+    const removedStaff = staff.filter(s => s.teamRoleId === team.roleId).length;
+
     const updatedStaff = staff.filter(s => s.teamRoleId !== team.roleId);
     saveJSON('staff.json', updatedStaff);
 
     // ⭐ DO NOT DELETE THE TEAM — KEEP IT IN teams.json
-    // (So we do NOT modify teams.json at all)
 
-    await logAction(
-      client,
-      `💀 Team **${team.emoji} ${team.name}** was wiped by ${interaction.user.tag}. All players and staff removed.`
-    );
+    // --- EMBED LOG ---
+    const embed = new EmbedBuilder()
+      .setColor('#c0392b')
+      .setAuthor({
+        name: guild.name,
+        iconURL: guild.iconURL({ size: 256 })
+      })
+      .setTitle('Team Wiped')
+      .setThumbnail(
+        team.emoji && team.emoji.startsWith('<')
+          ? `https://cdn.discordapp.com/emojis/${team.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+          : guild.iconURL({ size: 256 }) // fallback for unicode emoji
+      )
+      .addFields(
+        { name: 'Team', value: `${team.emoji} <@&${team.roleId}>`, inline: false },
+        { name: 'Players Removed', value: `**${removedPlayers}**`, inline: true },
+        { name: 'Staff Removed', value: `**${removedStaff}**`, inline: true },
+        { name: 'Wiped By', value: `${interaction.user.tag}`, inline: false }
+      )
+      .setTimestamp();
+
+    await logAction(client, { embeds: [embed] });
 
     await interaction.editReply({
       content: `Team **${team.emoji} ${team.name}** has been wiped. All players and staff have been removed, but the team still exists.`
