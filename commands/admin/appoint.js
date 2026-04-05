@@ -14,16 +14,27 @@ const {
 
 const { logAction } = require('../../utils/logger');
 
-// ⭐ Import MongoDB models
+// ⭐ MongoDB models
 const Teams = require('../../models/teams');
 const Staffs = require('../../models/staffs');
 
+// ⭐ Position → Role ID
 function getStaffRoleId(position) {
   switch (position) {
     case 'assistant': return ASSISTANT_MANAGER_ROLE;
     case 'manager': return MANAGER_ROLE;
     case 'chairman': return CHAIRMAN_ROLE;
     default: return null;
+  }
+}
+
+// ⭐ Pretty names
+function pretty(position) {
+  switch (position) {
+    case 'assistant': return 'Assistant Manager';
+    case 'manager': return 'Manager';
+    case 'chairman': return 'Chairman';
+    default: return 'Unknown';
   }
 }
 
@@ -43,7 +54,7 @@ module.exports = {
         .addChoices(
           { name: 'Chairman', value: 'chairman' },
           { name: 'Manager', value: 'manager' },
-          { name: 'Assistant', value: 'assistant' }
+          { name: 'Assistant Manager', value: 'assistant' }
         )
     ),
 
@@ -62,9 +73,8 @@ module.exports = {
     const user = interaction.options.getUser('user');
     const position = interaction.options.getString('position');
 
-    // ⭐ Load teams from MongoDB
+    // ⭐ Load teams
     const teams = await Teams.find();
-
     if (!teams.length) {
       return interaction.reply({
         content: 'There are no teams to appoint staff to.',
@@ -72,7 +82,7 @@ module.exports = {
       });
     }
 
-    // --- BUILD TEAM DROPDOWN ---
+    // --- TEAM DROPDOWN ---
     const menu = new StringSelectMenuBuilder()
       .setCustomId('appoint-team-select')
       .setPlaceholder('Select a team')
@@ -109,20 +119,19 @@ module.exports = {
         });
       }
 
-      // ⭐ CHECK IF USER IS ON ANY TEAM
+      // ⭐ Check if user is on any team
       const member = await interaction.guild.members.fetch(user.id);
       const userTeam = teams.find(t => member.roles.cache.has(t.roleId));
 
-      // ⭐ RULE ENFORCEMENT:
-      // User must be on THIS team OR on NO team
+      // ⭐ Must be on THIS team OR no team
       if (userTeam && userTeam.roleId !== team.roleId) {
         return i.update({
-          content: `${user} is already on **${userTeam.name}**, so they cannot be appointed to **${team.name}**.`,
+          content: `<@${user.id}> is already on **${userTeam.name}**, so they cannot be appointed to **${team.name}**.`,
           components: []
         });
       }
 
-      // ⭐ Prevent appointing if position already filled
+      // ⭐ Prevent duplicate position
       const existing = await Staffs.findOne({
         teamRoleId: team.roleId,
         position
@@ -130,22 +139,21 @@ module.exports = {
 
       if (existing) {
         return i.update({
-          content: `This team already has a **${position}**. Use \`/sack\` first.`,
+          content: `This team already has a **${pretty(position)}**. Use /sack first.`,
           components: []
         });
       }
 
       // ⭐ Prevent appointing someone who is already staff anywhere
       const alreadyStaff = await Staffs.findOne({ userId: user.id });
-
       if (alreadyStaff) {
         return i.update({
-          content: `${user} is already staff for **${alreadyStaff.teamName}** as **${alreadyStaff.position}**.`,
+          content: `<@${user.id}> is already staff for **${alreadyStaff.teamName}** as **${pretty(alreadyStaff.position)}**.`,
           components: []
         });
       }
 
-      // ⭐ Add team role if they are not already on it
+      // ⭐ Add team role
       if (!member.roles.cache.has(team.roleId)) {
         await member.roles.add(team.roleId);
       }
@@ -156,7 +164,7 @@ module.exports = {
         await member.roles.add(staffRoleId);
       }
 
-      // ⭐ Save to MongoDB
+      // ⭐ Save to DB
       await Staffs.create({
         userId: user.id,
         teamRoleId: team.roleId,
@@ -164,9 +172,9 @@ module.exports = {
         position
       });
 
-      // --- EMBED LOG ---
       const guild = interaction.guild;
 
+      // --- EMBED LOG ---
       const embed = new EmbedBuilder()
         .setColor('#3498db')
         .setAuthor({
@@ -181,7 +189,7 @@ module.exports = {
         )
         .addFields(
           { name: 'Team', value: `${team.emoji} <@&${team.roleId}>`, inline: false },
-          { name: 'Position', value: `**${position}**`, inline: false },
+          { name: 'Position', value: `<@&${staffRoleId}> (${pretty(position)})`, inline: false },
           { name: 'Appointed User', value: `<@${user.id}>`, inline: false },
           { name: 'Appointed By', value: `<@${interaction.user.id}>`, inline: false }
         )
@@ -190,7 +198,7 @@ module.exports = {
       await logAction(client, { embeds: [embed] });
 
       await i.update({
-        content: `${user} has been appointed as **${position}** of **${team.name}**.`,
+        content: `<@${user.id}> has been appointed as **${pretty(position)}** of **${team.name}**.`,
         components: []
       });
     });
