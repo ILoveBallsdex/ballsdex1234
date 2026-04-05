@@ -18,12 +18,23 @@ const { logAction } = require('../../utils/logger');
 const Teams = require('../../models/teams');
 const Staffs = require('../../models/staffs');
 
+// ⭐ Position → Role ID mapping
 function getStaffRoleId(position) {
   switch (position) {
     case 'assistant': return ASSISTANT_MANAGER_ROLE;
     case 'manager': return MANAGER_ROLE;
     case 'chairman': return CHAIRMAN_ROLE;
     default: return null;
+  }
+}
+
+// ⭐ Pretty position names
+function pretty(position) {
+  switch (position) {
+    case 'assistant': return 'Assistant Manager';
+    case 'manager': return 'Manager';
+    case 'chairman': return 'Chairman';
+    default: return 'Unknown';
   }
 }
 
@@ -108,7 +119,7 @@ module.exports = {
 
       if (!staffEntry) {
         return i.update({
-          content: `${user} is not a staff member of **${team.name}**.`,
+          content: `<@${user.id}> is not a staff member of **${team.name}**.`,
           components: []
         });
       }
@@ -132,9 +143,9 @@ module.exports = {
         await member.roles.remove(staffRoleId);
       }
 
-      // --- EMBED LOG ---
       const guild = interaction.guild;
 
+      // --- EMBED LOG ---
       const embed = new EmbedBuilder()
         .setColor('#e74c3c')
         .setAuthor({
@@ -149,16 +160,16 @@ module.exports = {
         )
         .addFields(
           { name: 'Team', value: `${team.emoji} <@&${team.roleId}>`, inline: false },
-          { name: 'Position Removed', value: `**${removed.position}**`, inline: true },
-          { name: 'User Sacked', value: `${user.tag}`, inline: false },
-          { name: 'Sacked By', value: `${interaction.user.tag}`, inline: false }
+          { name: 'Position Removed', value: `<@&${staffRoleId}> (${pretty(removed.position)})`, inline: true },
+          { name: 'User Sacked', value: `<@${user.id}>`, inline: false },
+          { name: 'Sacked By', value: `<@${interaction.user.id}>`, inline: false }
         )
         .setTimestamp();
 
       await logAction(client, { embeds: [embed] });
 
       await i.update({
-        content: `${user} has been sacked from **${team.name}** (was **${removed.position}**).`,
+        content: `<@${user.id}> has been sacked from **${team.name}** (was **${pretty(removed.position)}**).`,
         components: []
       });
     });
