@@ -109,6 +109,19 @@ module.exports = {
         });
       }
 
+      // ⭐ CHECK IF USER IS ON ANY TEAM
+      const member = await interaction.guild.members.fetch(user.id);
+      const userTeam = teams.find(t => member.roles.cache.has(t.roleId));
+
+      // ⭐ RULE ENFORCEMENT:
+      // User must be on THIS team OR on NO team
+      if (userTeam && userTeam.roleId !== team.roleId) {
+        return i.update({
+          content: `${user} is already on **${userTeam.name}**, so they cannot be appointed to **${team.name}**.`,
+          components: []
+        });
+      }
+
       // ⭐ Prevent appointing if position already filled
       const existing = await Staffs.findOne({
         teamRoleId: team.roleId,
@@ -132,10 +145,10 @@ module.exports = {
         });
       }
 
-      const member = await interaction.guild.members.fetch(user.id);
-
-      // ⭐ Add team role
-      await member.roles.add(team.roleId);
+      // ⭐ Add team role if they are not already on it
+      if (!member.roles.cache.has(team.roleId)) {
+        await member.roles.add(team.roleId);
+      }
 
       // ⭐ Add staff hierarchy role
       const staffRoleId = getStaffRoleId(position);
@@ -169,8 +182,8 @@ module.exports = {
         .addFields(
           { name: 'Team', value: `${team.emoji} <@&${team.roleId}>`, inline: false },
           { name: 'Position', value: `**${position}**`, inline: false },
-          { name: 'Appointed User', value: `${user.tag}`, inline: false },
-          { name: 'Appointed By', value: `${interaction.user.tag}`, inline: false }
+          { name: 'Appointed User', value: `<@${user.id}>`, inline: false },
+          { name: 'Appointed By', value: `<@${interaction.user.id}>`, inline: false }
         )
         .setTimestamp();
 
