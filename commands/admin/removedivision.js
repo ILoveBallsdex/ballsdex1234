@@ -7,8 +7,6 @@ const {
 
 const { REMOVE_DIVISION_ROLE } = require('../../utils/permissions');
 const { logAction } = require('../../utils/logger');
-
-// ⭐ MongoDB Models
 const Divisions = require('../../models/divisions');
 const Teams = require('../../models/teams');
 
@@ -27,22 +25,20 @@ module.exports = {
     if (!allowedRoles.some(roleId => interaction.member.roles.cache.has(roleId))) {
       return interaction.reply({
         content: 'You do not have permission to use this command.',
-        ephemeral: true
+        flags: 64
       });
     }
     // -------------------------
 
-    // ⭐ Load divisions from MongoDB
     const divisions = await Divisions.find();
 
     if (!divisions.length) {
       return interaction.reply({
         content: 'There are no divisions to remove.',
-        ephemeral: true
+        flags: 64
       });
     }
 
-    // Build dropdown menu
     const menu = new StringSelectMenuBuilder()
       .setCustomId('remove-division-select')
       .setPlaceholder('Select a division to remove')
@@ -58,10 +54,9 @@ module.exports = {
     await interaction.reply({
       content: 'Choose the division you want to remove:',
       components: [row],
-      ephemeral: true
+      flags: 64
     });
 
-    // Collector
     const collector = interaction.channel.createMessageComponentCollector({
       filter: i => i.customId === 'remove-division-select' && i.user.id === interaction.user.id,
       time: 15000
@@ -70,7 +65,6 @@ module.exports = {
     collector.on('collect', async i => {
       const selectedName = i.values[0];
 
-      // ⭐ Reload division from DB
       const division = await Divisions.findOne({ name: selectedName });
 
       if (!division) {
@@ -80,14 +74,11 @@ module.exports = {
         });
       }
 
-      // ⭐ Remove division from DB
       await Divisions.deleteOne({ name: selectedName });
 
-      // ⭐ Remove all teams inside that division
       const removedTeams = await Teams.countDocuments({ division: selectedName });
       await Teams.deleteMany({ division: selectedName });
 
-      // --- EMBED LOG ---
       const guild = interaction.guild;
 
       const embed = new EmbedBuilder()
