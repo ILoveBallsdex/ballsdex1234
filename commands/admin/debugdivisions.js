@@ -8,7 +8,14 @@ module.exports = {
 
   async execute(interaction) {
     const all = await Divisions.find().lean();
-    console.log("RAW DIVISIONS >>>", JSON.stringify(all, null, 2));
+
+    console.log("RAW DIVISIONS >>>");
+    all.forEach((doc, i) => {
+      console.log(`--- DOCUMENT ${i} ---`);
+      for (const key of Object.keys(doc)) {
+        console.log(`KEY: [${key}]  VALUE: [${doc[key]}]`);
+      }
+    });
 
     await interaction.reply({
       content: "Logged raw divisions to console.",
