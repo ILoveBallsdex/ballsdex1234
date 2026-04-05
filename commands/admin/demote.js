@@ -1,4 +1,8 @@
-const { SlashCommandBuilder } = require('discord.js');
+const {
+  SlashCommandBuilder,
+  EmbedBuilder
+} = require('discord.js');
+
 const {
   DEMOTE_ROLE,
   ASSISTANT_MANAGER_ROLE,
@@ -85,7 +89,7 @@ module.exports = {
       return interaction.reply({ content: 'You cannot demote someone equal to or above your rank.', ephemeral: true });
     }
 
-    // ❗ NEW: Prevent selecting a role higher than the target’s current one
+    // Prevent selecting a role higher than the target’s current one
     if (toPosition !== 'none' && toRank >= targetRank) {
       return interaction.reply({
         content: `You can only demote ${targetUser} to a LOWER position.`,
@@ -112,14 +116,41 @@ module.exports = {
     const oldRoleId = getStaffRoleId(targetEntry.position);
     if (oldRoleId) await guildMember.roles.remove(oldRoleId);
 
+    const oldPosition = targetEntry.position;
+    const teamName = executorEntry.teamName;
+    const teamRoleId = executorEntry.teamRoleId;
+
+    // If demoting to normal member
     if (toPosition === 'none') {
-      // 🔥 REMOVE STAFF ENTRY COMPLETELY
       const index = staff.indexOf(targetEntry);
       staff.splice(index, 1);
       saveJSON('staff.json', staff);
 
-      await logAction(client, `⬇️ ${targetUser.tag} was demoted to **Team Member** in **${executorEntry.teamName}** by ${interaction.user.tag}.`);
-      return interaction.reply({ content: `${targetUser} is now a **Team Member** of **${executorEntry.teamName}**.` });
+      // --- EMBED LOG ---
+      const guild = interaction.guild;
+
+      const embed = new EmbedBuilder()
+        .setColor('#e74c3c')
+        .setAuthor({
+          name: guild.name,
+          iconURL: guild.iconURL({ size: 256 })
+        })
+        .setTitle('Staff Demotion')
+        .setThumbnail(guild.iconURL({ size: 256 }))
+        .addFields(
+          { name: 'Team', value: `<@&${teamRoleId}>`, inline: false },
+          { name: 'Old Position', value: `**${oldPosition}**`, inline: false },
+          { name: 'New Position', value: `**Team Member**`, inline: false },
+          { name: 'Demoted User', value: `${targetUser.tag}`, inline: false },
+          { name: 'Demoted By', value: `${interaction.user.tag}`, inline: false }
+        )
+        .setTimestamp();
+
+      await logAction(client, { embeds: [embed] });
+
+      return interaction.reply({
+        content: `${targetUser} is now a **Team Member** of **${teamName}**.`
+      });
     }
 
     // 🔥 APPLY NEW STAFF ROLE
@@ -130,7 +161,30 @@ module.exports = {
     targetEntry.position = toPosition;
     saveJSON('staff.json', staff);
 
-    await logAction(client, `⬇️ ${targetUser.tag} was demoted to **${toPosition}** in **${executorEntry.teamName}** by ${interaction.user.tag}.`);
-    await interaction.reply({ content: `${targetUser} has been demoted to **${toPosition}** in **${executorEntry.teamName}**.` });
+    // --- EMBED LOG ---
+    const guild = interaction.guild;
+
+    const embed = new EmbedBuilder()
+      .setColor('#e67e22')
+      .setAuthor({
+        name: guild.name,
+        iconURL: guild.iconURL({ size: 256 })
+      })
+      .setTitle('Staff Demotion')
+      .setThumbnail(guild.iconURL({ size: 256 }))
+      .addFields(
+        { name: 'Team', value: `<@&${teamRoleId}>`, inline: false },
+        { name: 'Old Position', value: `**${oldPosition}**`, inline: false },
+        { name: 'New Position', value: `**${toPosition}**`, inline: false },
+        { name: 'Demoted User', value: `${targetUser.tag}`, inline: false },
+        { name: 'Demoted By', value: `${interaction.user.tag}`, inline: false }
+      )
+      .setTimestamp();
+
+    await logAction(client, { embeds: [embed] });
+
+    await interaction.reply({
+      content: `${targetUser} has been demoted to **${toPosition}** in **${teamName}**.`
+    });
   }
 };
