@@ -1,4 +1,9 @@
-const { SlashCommandBuilder } = require('discord.js');
+const {
+  SlashCommandBuilder,
+  ActionRowBuilder,
+  StringSelectMenuBuilder
+} = require('discord.js');
+
 const { REMOVE_DIVISION_ROLE } = require('../../utils/permissions');
 const { loadJSON, saveJSON } = require('../../utils/database');
 const { logAction } = require('../../utils/logger');
@@ -6,12 +11,11 @@ const { logAction } = require('../../utils/logger');
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('removedivision')
-    .setDescription('Remove a division by name')
-    .addStringOption(opt => opt.setName('name').setDescription('Division name').setRequired(true)),
+    .setDescription('Remove a division'),
 
   async execute(interaction, client) {
 
-    // --- FIXED PERMISSION CHECK (supports single or multiple role IDs) ---
+    // --- PERMISSION CHECK (supports single or multiple role IDs) ---
     const allowedRoles = Array.isArray(REMOVE_DIVISION_ROLE)
       ? REMOVE_DIVISION_ROLE
       : [REMOVE_DIVISION_ROLE];
@@ -25,20 +29,86 @@ module.exports = {
         ephemeral: true
       });
     }
-    // ---------------------------------------------------------------------
+    // ----------------------------------------------------------------
 
-    const name = interaction.options.getString('name');
     const divisions = loadJSON('divisions.json');
-    const index = divisions.findIndex(d => d.name.toLowerCase() === name.toLowerCase());
 
-    if (index === -1) {
-      return interaction.reply({ content: `No division named **${name}** found.`, ephemeral: true });
+    if (!divisions.length) {
+      return interaction.reply({
+        content: 'There are no divisions to remove.',
+        ephemeral: true
+      });
     }
 
-    const [removed] = divisions.splice(index, 1);
-    saveJSON('divisions.json', divisions);
+    // Build dropdown menu
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId('remove-division-select')
+      .setPlaceholder('Select a division to remove')
+      .addOptions(
+        divisions.map(div => ({
+          label: div.name,
+          value: div.name
+        }))
+      );
 
-    await logAction(client, `🗑️ Division **${removed.emoji} ${removed.name}** was removed by ${interaction.user.tag}.`);
-    await interaction.reply({ content: `Division **${removed.emoji} ${removed.name}** has been removed.` });
+    const row = new ActionRowBuilder().addComponents(menu);
+
+    await interaction.reply({
+      content: 'Choose the division you want to remove:',
+      components: [row],
+      ephemeral: true
+    });
+
+    // Collector
+    const collector = interaction.channel.createMessageComponentCollector({
+      filter: i => i.customId === 'remove-division-select' && i.user.id === interaction.user.id,
+      time: 15000
+    });
+
+    collector.on('collect', async i => {
+      const selectedName = i.values[0];
+
+      // Remove division
+      const divisions = loadJSON('divisions.json');
+      const index = divisions.findIndex(d => d.name === selectedName);
+
+      if (index === -1) {
+        return i.update({
+          content: `Division **${selectedName}** no longer exists.`,
+          components: []
+        });
+      }
+
+      const [removed] = divisions.splice(index, 1);
+      saveJSON('divisions.json', divisions);
+
+      // Remove all teams inside that division
+      let teams = loadJSON('teams.json');
+      const beforeCount = teams.length;
+
+      teams = teams.filter(t => t.division !== removed.name);
+      saveJSON('teams.json', teams);
+
+      const removedTeams = beforeCount - teams.length;
+
+      await logAction(
+        client,
+        `🗑️ Division **${removed.emoji} ${removed.name}** and **${removedTeams} teams** inside it were removed by ${interaction.user.tag}.`
+      );
+
+      await i.update({
+        content: `Division **${removed.emoji} ${removed.name}** has been removed.\nRemoved **${removedTeams}** teams from that division.`,
+        components: []
+      });
+    });
+
+    collector.on('end', collected => {
+      if (collected.size === 0) {
+        interaction.editReply({
+          content: 'No division selected. Command cancelled.',
+          components: []
+        });
+      }
+    });
   }
 };
