@@ -12,26 +12,17 @@ const {
 
 const { logAction } = require('../../utils/logger');
 const Staffs = require('../../models/staffs');
+const Teams = require('../../models/teams'); // ⭐ Needed to fetch team emoji
 
 const HIERARCHY = ['assistant', 'manager', 'chairman'];
 
 // ⭐ Position → Role ID mapping
 function getStaffRoleId(position) {
   switch (position) {
-    case 'assistant': return '1374495166651437169'; // Assistant Manager
-    case 'manager': return '1374495160632610918';   // Manager
+    case 'assistant': return '1374495166651437169';
+    case 'manager': return '1374495160632610918';
     case 'chairman': return CHAIRMAN_ROLE;
     default: return null;
-  }
-}
-
-// ⭐ Pretty names
-function pretty(position) {
-  switch (position) {
-    case 'assistant': return 'Assistant Manager';
-    case 'manager': return 'Manager';
-    case 'chairman': return 'Chairman';
-    default: return 'Team Player';
   }
 }
 
@@ -62,7 +53,6 @@ module.exports = {
     if (!allowedRoles.some(roleId => interaction.member.roles.cache.has(roleId))) {
       return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
     }
-    // -------------------------
 
     const targetUser = interaction.options.getUser('user');
     const toPosition = interaction.options.getString('to');
@@ -72,6 +62,9 @@ module.exports = {
     if (!executorEntry) {
       return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
     }
+
+    // ⭐ Load team to get emoji
+    const team = await Teams.findOne({ roleId: executorEntry.teamRoleId });
 
     const executorRank = HIERARCHY.indexOf(executorEntry.position);
     const toRank = HIERARCHY.indexOf(toPosition);
@@ -118,7 +111,7 @@ module.exports = {
 
       if (conflicting) {
         return interaction.reply({
-          content: `There is already a **${pretty(toPosition)}** on this team. Remove them first.`,
+          content: `There is already a **${toPosition}** on this team. Remove them first.`,
           ephemeral: true
         });
       }
@@ -134,10 +127,9 @@ module.exports = {
 
     const guild = interaction.guild;
 
-    // ⭐ TEAM LOGO TOP-RIGHT
-    const teamEmoji = executorEntry.emoji;
-    const teamThumbnail = teamEmoji && teamEmoji.startsWith('<')
-      ? `https://cdn.discordapp.com/emojis/${teamEmoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+    // ⭐ TEAM LOGO TOP-RIGHT (corrected)
+    const teamThumbnail = team?.emoji && team.emoji.startsWith('<')
+      ? `https://cdn.discordapp.com/emojis/${team.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
       : guild.iconURL({ size: 256 });
 
     // ⭐ If demoting to normal member
@@ -153,17 +145,9 @@ module.exports = {
         .setTitle('Team Demotion')
         .setThumbnail(teamThumbnail) // ⭐ team logo top-right
         .addFields(
-          { name: 'Team', value: `<@&${teamRoleId}>`, inline: false },
-          {
-            name: 'Old Position',
-            value: `<@&${oldRoleId}> (${pretty(oldPosition)})`,
-            inline: true
-          },
-          {
-            name: 'New Position',
-            value: `Team Player`,
-            inline: true
-          },
+          { name: 'Team', value: `${team.emoji} <@&${teamRoleId}>`, inline: false },
+          { name: 'Old Position', value: oldRoleId ? `<@&${oldRoleId}>` : '*None*', inline: true },
+          { name: 'New Position', value: `Team Player`, inline: true },
           { name: 'Demoted User', value: `<@${targetUser.id}>`, inline: false },
           { name: 'Demoted By', value: `<@${interaction.user.id}>`, inline: false }
         )
@@ -193,17 +177,9 @@ module.exports = {
       .setTitle('Team Demotion')
       .setThumbnail(teamThumbnail) // ⭐ team logo top-right
       .addFields(
-        { name: 'Team', value: `<@&${teamRoleId}>`, inline: false },
-        {
-          name: 'Old Position',
-          value: `<@&${oldRoleId}> (${pretty(oldPosition)})`,
-          inline: true
-        },
-        {
-          name: 'New Position',
-          value: `<@&${newRoleId}> (${pretty(toPosition)})`,
-          inline: true
-        },
+        { name: 'Team', value: `${team.emoji} <@&${teamRoleId}>`, inline: false },
+        { name: 'Old Position', value: `<@&${oldRoleId}>`, inline: true },
+        { name: 'New Position', value: `<@&${newRoleId}>`, inline: true },
         { name: 'Demoted User', value: `<@${targetUser.id}>`, inline: false },
         { name: 'Demoted By', value: `<@${interaction.user.id}>`, inline: false }
       )
@@ -212,7 +188,7 @@ module.exports = {
     await logAction(client, { embeds: [embed] });
 
     await interaction.reply({
-      content: `<@${targetUser.id}> has been demoted to **${pretty(toPosition)}** in **${teamName}**.`
+      content: `<@${targetUser.id}> has been demoted to <@&${newRoleId}> in **${teamName}**.`
     });
   }
 };
