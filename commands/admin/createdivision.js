@@ -6,7 +6,7 @@ const {
 const { CREATE_DIVISION_ROLE } = require('../../utils/permissions');
 const { logAction } = require('../../utils/logger');
 
-// ⭐ Import MongoDB model
+// ⭐ MongoDB Model
 const Divisions = require('../../models/divisions');
 
 module.exports = {
@@ -42,10 +42,12 @@ module.exports = {
     }
     // -------------------------
 
-    const name = interaction.options.getString('name');
+    // ⭐ Normalize name (fixes EPL issue)
+    let name = interaction.options.getString('name').trim();
+    name = name.replace(/\s+/g, ' '); // collapse double spaces
     const emoji = interaction.options.getString('emoji');
 
-    // ⭐ Check if division already exists
+    // ⭐ Duplicate check (case-insensitive, normalized)
     const existing = await Divisions.findOne({
       name: { $regex: new RegExp(`^${name}$`, 'i') }
     });
