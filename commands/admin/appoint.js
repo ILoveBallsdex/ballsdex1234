@@ -12,8 +12,11 @@ const {
   CHAIRMAN_ROLE
 } = require('../../utils/permissions');
 
-const { loadJSON, saveJSON } = require('../../utils/database');
 const { logAction } = require('../../utils/logger');
+
+// ⭐ Import MongoDB models
+const Teams = require('../../models/teams');
+const Staffs = require('../../models/staffs');
 
 function getStaffRoleId(position) {
   switch (position) {
@@ -59,8 +62,8 @@ module.exports = {
     const user = interaction.options.getUser('user');
     const position = interaction.options.getString('position');
 
-    const teams = loadJSON('teams.json');
-    const staff = loadJSON('staff.json');
+    // ⭐ Load teams from MongoDB
+    const teams = await Teams.find();
 
     if (!teams.length) {
       return interaction.reply({
@@ -97,7 +100,7 @@ module.exports = {
 
     collector.on('collect', async i => {
       const teamRoleId = i.values[0];
-      const team = teams.find(t => t.roleId === teamRoleId);
+      const team = await Teams.findOne({ roleId: teamRoleId });
 
       if (!team) {
         return i.update({
@@ -106,8 +109,12 @@ module.exports = {
         });
       }
 
-      // Prevent appointing if position already filled
-      const existing = staff.find(s => s.teamRoleId === team.roleId && s.position === position);
+      // ⭐ Prevent appointing if position already filled
+      const existing = await Staffs.findOne({
+        teamRoleId: team.roleId,
+        position
+      });
+
       if (existing) {
         return i.update({
           content: `This team already has a **${position}**. Use \`/sack\` first.`,
@@ -115,8 +122,9 @@ module.exports = {
         });
       }
 
-      // Prevent appointing someone who is already staff anywhere
-      const alreadyStaff = staff.find(s => s.userId === user.id);
+      // ⭐ Prevent appointing someone who is already staff anywhere
+      const alreadyStaff = await Staffs.findOne({ userId: user.id });
+
       if (alreadyStaff) {
         return i.update({
           content: `${user} is already staff for **${alreadyStaff.teamName}** as **${alreadyStaff.position}**.`,
@@ -126,24 +134,22 @@ module.exports = {
 
       const member = await interaction.guild.members.fetch(user.id);
 
-      // Add team role
+      // ⭐ Add team role
       await member.roles.add(team.roleId);
 
-      // Add staff hierarchy role
+      // ⭐ Add staff hierarchy role
       const staffRoleId = getStaffRoleId(position);
       if (staffRoleId) {
         await member.roles.add(staffRoleId);
       }
 
-      // Save to staff.json
-      staff.push({
+      // ⭐ Save to MongoDB
+      await Staffs.create({
         userId: user.id,
         teamRoleId: team.roleId,
         teamName: team.name,
         position
       });
-
-      saveJSON('staff.json', staff);
 
       // --- EMBED LOG ---
       const guild = interaction.guild;
