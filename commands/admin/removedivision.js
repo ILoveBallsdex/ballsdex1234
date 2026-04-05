@@ -44,7 +44,6 @@ module.exports = {
     }
     // -------------------------
 
-    // Load divisions
     const divisions = await Divisions.find();
 
     if (!divisions.length) {
@@ -80,7 +79,6 @@ module.exports = {
     });
 
     collector.on('collect', async i => {
-      // Normalize + escape the selected name
       const rawName = i.values[0];
       const normalizedName = normalizeName(rawName);
       const safeName = escapeRegex(normalizedName);
@@ -97,18 +95,26 @@ module.exports = {
         });
       }
 
+      // ⭐ Fetch all teams BEFORE deleting
+      const teamsInDivision = await Teams.find({ division: division.name });
+
       // Delete division
       await Divisions.deleteOne({
         name: { $regex: new RegExp(`^${safeName}$`, 'i') }
       });
 
       // Delete teams in that division
-      const removedTeams = await Teams.countDocuments({ division: division.name });
+      const removedTeams = teamsInDivision.length;
       await Teams.deleteMany({ division: division.name });
 
-      // Logging embed
       const guild = interaction.guild;
 
+      // ⭐ Build team list for embed
+      const teamList = removedTeams
+        ? teamsInDivision.map(t => `• ${t.emoji} **${t.name}**`).join('\n')
+        : '*No teams were inside this division.*';
+
+      // --- EMBED LOG ---
       const embed = new EmbedBuilder()
         .setColor('#e74c3c')
         .setAuthor({
@@ -124,14 +130,19 @@ module.exports = {
         .addFields(
           { name: 'Division', value: `${division.emoji} **${division.name}**`, inline: false },
           { name: 'Teams Removed', value: `**${removedTeams}**`, inline: true },
-          { name: 'Removed By', value: `${interaction.user.tag}`, inline: false }
+          { name: 'Removed By', value: `<@${interaction.user.id}>`, inline: false },
+          { name: 'Teams Affected', value: teamList, inline: false }
         )
         .setTimestamp();
 
       await logAction(client, { embeds: [embed] });
 
+      // User confirmation
       await i.update({
-        content: `Division **${division.emoji} ${division.name}** has been removed.\nRemoved **${removedTeams}** teams from that division.`,
+        content:
+          `Division **${division.emoji} ${division.name}** has been removed.\n` +
+          `Removed **${removedTeams}** teams.\n` +
+          `Removed by <@${interaction.user.id}>.`,
         components: []
       });
     });
