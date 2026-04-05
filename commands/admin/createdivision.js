@@ -4,8 +4,10 @@ const {
 } = require('discord.js');
 
 const { CREATE_DIVISION_ROLE } = require('../../utils/permissions');
-const { loadJSON, saveJSON } = require('../../utils/database');
 const { logAction } = require('../../utils/logger');
+
+// ⭐ Import MongoDB model
+const Divisions = require('../../models/divisions');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -43,18 +45,20 @@ module.exports = {
     const name = interaction.options.getString('name');
     const emoji = interaction.options.getString('emoji');
 
-    const divisions = loadJSON('divisions.json');
+    // ⭐ Check if division already exists
+    const existing = await Divisions.findOne({
+      name: { $regex: new RegExp(`^${name}$`, 'i') }
+    });
 
-    if (divisions.find(d => d.name.toLowerCase() === name.toLowerCase())) {
+    if (existing) {
       return interaction.reply({
         content: `A division named **${name}** already exists.`,
         ephemeral: true
       });
     }
 
-    // Save division
-    divisions.push({ name, emoji });
-    saveJSON('divisions.json', divisions);
+    // ⭐ Save division to MongoDB
+    await Divisions.create({ name, emoji });
 
     // --- EMBED LOG ---
     const guild = interaction.guild;
@@ -69,7 +73,7 @@ module.exports = {
       .setThumbnail(
         emoji.startsWith('<')
           ? `https://cdn.discordapp.com/emojis/${emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
-          : guild.iconURL({ size: 256 }) // fallback for unicode emoji
+          : guild.iconURL({ size: 256 })
       )
       .addFields(
         { name: 'Division Name', value: `**${name}**`, inline: false },
