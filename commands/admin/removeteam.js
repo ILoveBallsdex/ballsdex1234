@@ -1,8 +1,8 @@
 const {
   SlashCommandBuilder,
-  EmbedBuilder,
   ActionRowBuilder,
-  StringSelectMenuBuilder
+  StringSelectMenuBuilder,
+  EmbedBuilder
 } = require('discord.js');
 
 const { REMOVE_TEAM_ROLE } = require('../../utils/permissions');
@@ -81,16 +81,43 @@ module.exports = {
         });
       }
 
+      const guild = interaction.guild;
+      const role = guild.roles.cache.get(team.roleId);
+
+      // ⭐ TRACK REMOVED PLAYERS
+      const removedPlayers = [];
+
+      if (role) {
+        for (const [, member] of role.members) {
+          try {
+            await member.roles.remove(team.roleId);
+            removedPlayers.push(member);
+          } catch (err) {
+            console.error(`Failed to remove team role from ${member.user.tag}:`, err);
+          }
+        }
+      }
+
+      // ⭐ TRACK REMOVED STAFF
+      const staffEntries = await Staffs.find({ teamRoleId });
+      const removedStaff = staffEntries.length;
+
+      await Staffs.deleteMany({ teamRoleId });
+
       // ⭐ Remove team from DB
       await Teams.deleteOne({ roleId: teamRoleId });
 
-      // ⭐ Remove all staff entries for this team
-      const removedStaff = await Staffs.countDocuments({ teamRoleId });
-      await Staffs.deleteMany({ teamRoleId });
+      // ⭐ Build player list
+      const playerList = removedPlayers.length
+        ? removedPlayers.map(m => `• <@${m.id}> — removed from **${team.name}**`).join('\n')
+        : '*No players had the role.*';
+
+      // ⭐ Build staff list
+      const staffList = removedStaff
+        ? staffEntries.map(s => `• <@${s.userId}> — removed from **${s.position}**`).join('\n')
+        : '*No staff positions existed.*';
 
       // --- EMBED LOG ---
-      const guild = interaction.guild;
-
       const embed = new EmbedBuilder()
         .setColor('#e74c3c')
         .setAuthor({
@@ -105,15 +132,21 @@ module.exports = {
         )
         .addFields(
           { name: 'Team', value: `${team.emoji} **${team.name}**`, inline: false },
-          { name: 'Staff Removed', value: `**${removedStaff}**`, inline: true },
-          { name: 'Removed By', value: `${interaction.user.tag}`, inline: false }
+          { name: 'Players Removed', value: `${removedPlayers.length}`, inline: true },
+          { name: 'Staff Removed', value: `${removedStaff}`, inline: true },
+          { name: 'Removed By', value: `<@${interaction.user.id}>`, inline: false },
+          { name: 'Players Affected', value: playerList, inline: false },
+          { name: 'Staff Affected', value: staffList, inline: false }
         )
         .setTimestamp();
 
       await logAction(client, { embeds: [embed] });
 
       await i.update({
-        content: `Team **${team.emoji} ${team.name}** has been removed.`,
+        content:
+          `Team **${team.emoji} ${team.name}** has been removed.\n` +
+          `Removed **${removedPlayers.length}** players and **${removedStaff}** staff.\n` +
+          `Removed by <@${interaction.user.id}>.`,
         components: []
       });
     });
