@@ -3,11 +3,7 @@ const { Client, Collection, GatewayIntentBits, REST, Routes } = require('discord
 const fs = require('fs');
 const path = require('path');
 const { keepAlive } = require('./keep_alive');
-
-// ⭐ ADD THIS
 const connectMongo = require('./utils/mongo');
-// ⭐ CONNECT TO MONGO
-connectMongo();
 
 keepAlive();
 
@@ -20,9 +16,9 @@ const client = new Client({
 });
 
 client.commands = new Collection();
-
 const commandsData = [];
 
+// ⭐ LOAD COMMANDS FIRST (loads models BEFORE connecting)
 function loadCommands(dir) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
@@ -41,6 +37,7 @@ function loadCommands(dir) {
 
 loadCommands(path.join(__dirname, 'commands'));
 
+// ⭐ LOAD EVENTS
 const eventsDir = path.join(__dirname, 'events');
 for (const file of fs.readdirSync(eventsDir).filter(f => f.endsWith('.js'))) {
   const event = require(path.join(eventsDir, file));
@@ -50,6 +47,9 @@ for (const file of fs.readdirSync(eventsDir).filter(f => f.endsWith('.js'))) {
     client.on(event.name, (...args) => event.execute(...args, client));
   }
 }
+
+// ⭐ CONNECT TO MONGO AFTER MODELS ARE LOADED
+connectMongo();
 
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}`);
