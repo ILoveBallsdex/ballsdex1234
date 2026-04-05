@@ -66,7 +66,7 @@ module.exports = {
     const managerText = manager ? `<@${manager.userId}>` : "Vacant";
     const assistantText = assistant ? `<@${assistant.userId}>` : "Vacant";
 
-    // Build player list WITHOUT fetching entire guild
+    // ⭐ Optimized player list — fetch ONLY the needed members
     let playerList = "";
 
     for (const p of team.players || []) {
@@ -81,6 +81,7 @@ module.exports = {
 
     if (playerList === "") playerList = "*No players signed yet.*";
 
+    // Thumbnail logic
     const thumbnail = team.emoji && team.emoji.startsWith("<")
       ? `https://cdn.discordapp.com/emojis/${team.emoji.replace(/\D/g, "")}.png?size=256&quality=lossless`
       : interaction.guild.iconURL({ size: 256 });
