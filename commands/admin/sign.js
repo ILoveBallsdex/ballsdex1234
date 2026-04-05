@@ -23,7 +23,7 @@ module.exports = {
 
   async execute(interaction, client) {
 
-    // --- PERMISSION CHECK (supports multiple roles) ---
+    // --- PERMISSION CHECK ---
     const allowedRoles = Array.isArray(SIGN_ROLE) ? SIGN_ROLE : [SIGN_ROLE];
     if (
       allowedRoles.length > 0 &&
@@ -34,7 +34,7 @@ module.exports = {
         ephemeral: true
       });
     }
-    // --------------------------------------------------
+    // -------------------------
 
     const staff = loadJSON('staff.json');
     const staffEntry = staff.find(s => s.userId === interaction.user.id);
@@ -59,7 +59,7 @@ module.exports = {
     const player = interaction.options.getUser('player');
     const member = await interaction.guild.members.fetch(player.id);
 
-    // 🔥 CHECK IF PLAYER IS ALREADY ON ANY TEAM
+    // Check if player is already on ANY team
     const alreadyOnTeam = teams.find(t => member.roles.cache.has(t.roleId));
 
     if (alreadyOnTeam) {
@@ -69,20 +69,39 @@ module.exports = {
       });
     }
 
-    // 🔥 SIGN PLAYER
+    // SIGN PLAYER
     await member.roles.add(team.roleId);
 
-    await logAction(
-      client,
-      `✍️ ${player.tag} was signed to **${team.name}** by ${interaction.user.tag}.`
-    );
+    // --- EMBED LOG ---
+    const guild = interaction.guild;
+
+    const logEmbed = new EmbedBuilder()
+      .setColor('#00AEEF')
+      .setAuthor({
+        name: guild.name,
+        iconURL: guild.iconURL({ size: 256 })
+      })
+      .setTitle('Player Signed')
+      .setThumbnail(
+        team.emoji && team.emoji.startsWith('<')
+          ? `https://cdn.discordapp.com/emojis/${team.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+          : guild.iconURL({ size: 256 })
+      )
+      .addFields(
+        { name: 'Team', value: `${team.emoji} <@&${team.roleId}>`, inline: false },
+        { name: 'Signed Player', value: `${player.tag}`, inline: false },
+        { name: 'Signed By', value: `${interaction.user.tag}`, inline: false }
+      )
+      .setTimestamp();
+
+    await logAction(client, { embeds: [logEmbed] });
 
     await interaction.reply({
       content: `${player} has been signed to **${team.name}**.`
     });
 
-    // 🔥 SEND DM TO PLAYER
-    const embed = new EmbedBuilder()
+    // --- DM TO PLAYER ---
+    const dmEmbed = new EmbedBuilder()
       .setTitle(`You have been signed!`)
       .setDescription(`You have been signed to ${team.emoji} **${team.name}**.`)
       .setColor('#00AEEF')
@@ -98,18 +117,18 @@ module.exports = {
     let dmMessage;
     try {
       dmMessage = await player.send({
-        embeds: [embed],
+        embeds: [dmEmbed],
         components: [row]
       });
     } catch {
       // Player has DMs closed — ignore
     }
 
-    // 🔥 BUTTON HANDLER (24-hour expiration)
+    // --- BUTTON HANDLER (24 hours) ---
     if (dmMessage) {
       const collector = dmMessage.createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 24 * 60 * 60 * 1000 // 24 hours
+        time: 24 * 60 * 60 * 1000
       });
 
       collector.on('collect', async (btnInteraction) => {
@@ -141,7 +160,6 @@ module.exports = {
       });
 
       collector.on('end', async () => {
-        // Disable button after timeout
         const disabledRow = new ActionRowBuilder().addComponents(
           ButtonBuilder.from(forceBtn).setDisabled(true)
         );
