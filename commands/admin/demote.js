@@ -25,7 +25,7 @@ function getStaffRoleId(position) {
   }
 }
 
-// ⭐ Position → Pretty Name
+// ⭐ Pretty names
 function pretty(position) {
   switch (position) {
     case 'assistant': return 'Assistant Manager';
@@ -80,7 +80,7 @@ module.exports = {
 
     // ⭐ Must be on the same team
     if (!guildMember.roles.cache.has(executorEntry.teamRoleId)) {
-      return interaction.reply({ content: `${targetUser} is not on your team.`, ephemeral: true });
+      return interaction.reply({ content: `<@${targetUser.id}> is not on your team.`, ephemeral: true });
     }
 
     // ⭐ Must already be staff
@@ -90,7 +90,7 @@ module.exports = {
     });
 
     if (!targetEntry) {
-      return interaction.reply({ content: `${targetUser} is not in a management position on your team.`, ephemeral: true });
+      return interaction.reply({ content: `<@${targetUser.id}> is not in a management position on your team.`, ephemeral: true });
     }
 
     const targetRank = HIERARCHY.indexOf(targetEntry.position);
@@ -103,7 +103,7 @@ module.exports = {
     // ⭐ Prevent selecting a role higher than the target’s current one
     if (toPosition !== 'none' && toRank >= targetRank) {
       return interaction.reply({
-        content: `You can only demote ${targetUser} to a LOWER position.`,
+        content: `You can only demote <@${targetUser.id}> to a LOWER position.`,
         ephemeral: true
       });
     }
@@ -132,24 +132,38 @@ module.exports = {
     const teamName = executorEntry.teamName;
     const teamRoleId = executorEntry.teamRoleId;
 
+    const guild = interaction.guild;
+
+    // ⭐ TEAM LOGO TOP-RIGHT
+    const teamEmoji = executorEntry.emoji;
+    const teamThumbnail = teamEmoji && teamEmoji.startsWith('<')
+      ? `https://cdn.discordapp.com/emojis/${teamEmoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+      : guild.iconURL({ size: 256 });
+
     // ⭐ If demoting to normal member
     if (toPosition === 'none') {
       await Staffs.deleteOne({ _id: targetEntry._id });
 
-      const guild = interaction.guild;
-
       const embed = new EmbedBuilder()
         .setColor('#e74c3c')
         .setAuthor({
-          name: guild.name,
+          name: guild.name, // league logo top-left
           iconURL: guild.iconURL({ size: 256 })
         })
         .setTitle('Team Demotion')
-        .setThumbnail(guild.iconURL({ size: 256 }))
+        .setThumbnail(teamThumbnail) // ⭐ team logo top-right
         .addFields(
           { name: 'Team', value: `<@&${teamRoleId}>`, inline: false },
-          { name: 'Old Position', value: `<@&${oldRoleId}> (${pretty(oldPosition)})`, inline: false },
-          { name: 'New Position', value: `Team Player`, inline: false },
+          {
+            name: 'Old Position',
+            value: `<@&${oldRoleId}> (${pretty(oldPosition)})`,
+            inline: true
+          },
+          {
+            name: 'New Position',
+            value: `Team Player`,
+            inline: true
+          },
           { name: 'Demoted User', value: `<@${targetUser.id}>`, inline: false },
           { name: 'Demoted By', value: `<@${interaction.user.id}>`, inline: false }
         )
@@ -170,20 +184,26 @@ module.exports = {
     targetEntry.position = toPosition;
     await targetEntry.save();
 
-    const guild = interaction.guild;
-
     const embed = new EmbedBuilder()
       .setColor('#e67e22')
       .setAuthor({
-        name: guild.name,
+        name: guild.name, // league logo top-left
         iconURL: guild.iconURL({ size: 256 })
       })
       .setTitle('Team Demotion')
-      .setThumbnail(guild.iconURL({ size: 256 }))
+      .setThumbnail(teamThumbnail) // ⭐ team logo top-right
       .addFields(
         { name: 'Team', value: `<@&${teamRoleId}>`, inline: false },
-        { name: 'Old Position', value: `<@&${oldRoleId}> (${pretty(oldPosition)})`, inline: false },
-        { name: 'New Position', value: `<@&${newRoleId}> (${pretty(toPosition)})`, inline: false },
+        {
+          name: 'Old Position',
+          value: `<@&${oldRoleId}> (${pretty(oldPosition)})`,
+          inline: true
+        },
+        {
+          name: 'New Position',
+          value: `<@&${newRoleId}> (${pretty(toPosition)})`,
+          inline: true
+        },
         { name: 'Demoted User', value: `<@${targetUser.id}>`, inline: false },
         { name: 'Demoted By', value: `<@${interaction.user.id}>`, inline: false }
       )
