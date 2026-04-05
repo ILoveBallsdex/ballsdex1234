@@ -71,7 +71,7 @@ module.exports = {
     await interaction.reply({
       content: "Select a division to view its teams:",
       components: [row],
-      ephemeral: false, // ⭐ PUBLIC NOW
+      ephemeral: false, // PUBLIC
     });
   },
 
@@ -119,8 +119,9 @@ module.exports = {
       .setTitle(`${division.emoji} ${division.name}`)
       .setColor(0x5865f2)
       .setDescription(
-        `### Division Overview\nBelow is a full list of teams, their management, and player counts.\n\n` +
-        `**Vacant positions** mean the team is available to claim.`
+        `### Division Overview\n` +
+        `Below is a full list of teams, their management, and player counts.\n\n` +
+        `Vacant positions mean the team is available to claim.`
       )
       .setTimestamp();
 
@@ -131,22 +132,29 @@ module.exports = {
       const manager = teamStaff.find((s) => s.position === "manager");
       const assistant = teamStaff.find((s) => s.position === "assistant");
 
-      const chairmanText = chairman ? `<@${chairman.userId}>` : "**Vacant**";
-      const managerText = manager ? `<@${manager.userId}>` : "**Vacant**";
-      const assistantText = assistant ? `<@${assistant.userId}>` : "**Vacant**";
+      const chairmanText = chairman ? `<@${chairman.userId}>` : "Vacant";
+      const managerText = manager ? `<@${manager.userId}>` : "Vacant";
+      const assistantText = assistant ? `<@${assistant.userId}>` : "Vacant";
 
       const role = await interaction.guild.roles.fetch(team.roleId).catch(() => null);
       const playerCount = role ? role.members.size : 0;
 
-      embed.addFields({
-        name: `${team.emoji} **${team.name}**`,
-        value:
-          `• **Chairman:** ${chairmanText}\n` +
-          `• **Manager:** ${managerText}\n` +
-          `• **Assistant Manager:** ${assistantText}\n` +
-          `• **Players:** ${playerCount}`,
-        inline: false,
-      });
+      embed.addFields(
+        {
+          name: `${team.emoji} **${team.name}**`,
+          value:
+            `Chairman: **${chairmanText}**\n` +
+            `Manager: **${managerText}**\n` +
+            `Assistant Manager: **${assistantText}**\n` +
+            `Players: **${playerCount}**`,
+          inline: false,
+        },
+        {
+          name: '\u200B',
+          value: '\u200B',
+          inline: false
+        }
+      );
     }
 
     await interaction.update({
