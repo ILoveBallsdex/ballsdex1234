@@ -10,6 +10,20 @@ const { logAction } = require('../../utils/logger');
 const Divisions = require('../../models/divisions');
 const Teams = require('../../models/teams');
 
+// Escape regex special characters so "GFC | EPL" is treated literally
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Normalize Unicode (removes zero‑width chars, weird spacing, etc.)
+function normalizeName(str) {
+  return str
+    .normalize("NFKD")
+    .replace(/[\u200B-\u200D\uFEFF]/g, '') // zero‑width chars
+    .replace(/\s+/g, ' ')                 // collapse spaces
+    .trim();
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('removedivision')
@@ -30,6 +44,7 @@ module.exports = {
     }
     // -------------------------
 
+    // Load divisions
     const divisions = await Divisions.find();
 
     if (!divisions.length) {
@@ -39,6 +54,7 @@ module.exports = {
       });
     }
 
+    // Dropdown menu
     const menu = new StringSelectMenuBuilder()
       .setCustomId('remove-division-select')
       .setPlaceholder('Select a division to remove')
@@ -57,28 +73,40 @@ module.exports = {
       flags: 64
     });
 
+    // Collector
     const collector = interaction.channel.createMessageComponentCollector({
       filter: i => i.customId === 'remove-division-select' && i.user.id === interaction.user.id,
       time: 15000
     });
 
     collector.on('collect', async i => {
-      const selectedName = i.values[0];
+      // Normalize + escape the selected name
+      const rawName = i.values[0];
+      const normalizedName = normalizeName(rawName);
+      const safeName = escapeRegex(normalizedName);
 
-      const division = await Divisions.findOne({ name: selectedName });
+      // Reload division safely
+      const division = await Divisions.findOne({
+        name: { $regex: new RegExp(`^${safeName}$`, 'i') }
+      });
 
       if (!division) {
         return i.update({
-          content: `Division **${selectedName}** no longer exists.`,
+          content: `Division **${rawName}** no longer exists.`,
           components: []
         });
       }
 
-      await Divisions.deleteOne({ name: selectedName });
+      // Delete division
+      await Divisions.deleteOne({
+        name: { $regex: new RegExp(`^${safeName}$`, 'i') }
+      });
 
-      const removedTeams = await Teams.countDocuments({ division: selectedName });
-      await Teams.deleteMany({ division: selectedName });
+      // Delete teams in that division
+      const removedTeams = await Teams.countDocuments({ division: division.name });
+      await Teams.deleteMany({ division: division.name });
 
+      // Logging embed
       const guild = interaction.guild;
 
       const embed = new EmbedBuilder()
