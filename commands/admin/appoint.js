@@ -1,4 +1,8 @@
-const { SlashCommandBuilder } = require('discord.js');
+const {
+  SlashCommandBuilder,
+  EmbedBuilder
+} = require('discord.js');
+
 const {
   APPOINT_ROLE,
   ASSISTANT_MANAGER_ROLE,
@@ -77,7 +81,7 @@ module.exports = {
       });
     }
 
-    // 🔥 Prevent appointing if this position is already filled
+    // Prevent appointing if this position is already filled
     const existing = staff.find(s => s.teamRoleId === team.roleId && s.position === position);
     if (existing) {
       return interaction.reply({
@@ -86,7 +90,7 @@ module.exports = {
       });
     }
 
-    // 🔥 Prevent appointing someone who is already staff on ANY team
+    // Prevent appointing someone who is already staff on ANY team
     const alreadyStaff = staff.find(s => s.userId === user.id);
     if (alreadyStaff) {
       return interaction.reply({
@@ -97,16 +101,16 @@ module.exports = {
 
     const member = await interaction.guild.members.fetch(user.id);
 
-    // 🔥 Add team role
+    // Add team role
     await member.roles.add(team.roleId);
 
-    // 🔥 Add staff hierarchy role
+    // Add staff hierarchy role
     const staffRoleId = getStaffRoleId(position);
     if (staffRoleId) {
       await member.roles.add(staffRoleId);
     }
 
-    // 🔥 Save to staff.json
+    // Save to staff.json
     staff.push({
       userId: user.id,
       teamRoleId: team.roleId,
@@ -116,12 +120,32 @@ module.exports = {
 
     saveJSON('staff.json', staff);
 
-    // 🔥 Log + reply
-    await logAction(
-      client,
-      `👔 ${user.tag} was appointed as **${position}** of **${team.name}** by ${interaction.user.tag}.`
-    );
+    // --- EMBED LOG ---
+    const guild = interaction.guild;
 
+    const embed = new EmbedBuilder()
+      .setColor('#3498db')
+      .setAuthor({
+        name: guild.name,
+        iconURL: guild.iconURL({ size: 256 })
+      })
+      .setTitle('Staff Appointment')
+      .setThumbnail(
+        team.emoji && team.emoji.startsWith('<')
+          ? `https://cdn.discordapp.com/emojis/${team.emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+          : guild.iconURL({ size: 256 }) // fallback
+      )
+      .addFields(
+        { name: 'Team', value: `<@&${team.roleId}>`, inline: false },
+        { name: 'Position', value: `**${position.charAt(0).toUpperCase() + position.slice(1)}**`, inline: false },
+        { name: 'Appointed User', value: `${user.tag}`, inline: false },
+        { name: 'Appointed By', value: `${interaction.user.tag}`, inline: false }
+      )
+      .setTimestamp();
+
+    await logAction(client, { embeds: [embed] });
+
+    // User confirmation
     await interaction.reply({
       content: `${user} has been appointed as **${position}** of **${team.name}**.`
     });
