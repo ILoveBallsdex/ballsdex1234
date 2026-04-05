@@ -1,4 +1,10 @@
-const { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+const {
+  SlashCommandBuilder,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  EmbedBuilder
+} = require('discord.js');
+
 const { ADD_TEAM_ROLE } = require('../../utils/permissions');
 const { loadJSON, saveJSON } = require('../../utils/database');
 const { logAction } = require('../../utils/logger');
@@ -12,7 +18,7 @@ module.exports = {
 
   async execute(interaction, client) {
 
-    // --- FIXED PERMISSION CHECK ---
+    // --- PERMISSION CHECK ---
     const allowedRoles = Array.isArray(ADD_TEAM_ROLE)
       ? ADD_TEAM_ROLE
       : [ADD_TEAM_ROLE];
@@ -26,7 +32,7 @@ module.exports = {
         ephemeral: true
       });
     }
-    // ------------------------------
+    // -------------------------
 
     const role = interaction.options.getRole('role');
     const emoji = interaction.options.getString('emoji');
@@ -40,7 +46,7 @@ module.exports = {
       });
     }
 
-    // Build dropdown options
+    // Build dropdown menu
     const menu = new StringSelectMenuBuilder()
       .setCustomId('select-division')
       .setPlaceholder('Select a division')
@@ -59,7 +65,7 @@ module.exports = {
       ephemeral: true
     });
 
-    // Collector for dropdown selection
+    // Collector
     const collector = interaction.channel.createMessageComponentCollector({
       filter: i => i.customId === 'select-division' && i.user.id === interaction.user.id,
       time: 15000
@@ -78,6 +84,7 @@ module.exports = {
         });
       }
 
+      // Save team
       teams.push({
         name: role.name,
         roleId: role.id,
@@ -87,11 +94,25 @@ module.exports = {
 
       saveJSON('teams.json', teams);
 
-      await logAction(
-        client,
-        `🏟️ Team **${emoji} ${role.name}** was added to division **${division.name}** by ${interaction.user.tag}.`
-      );
+      // --- EMBED LOG ---
+      const embed = new EmbedBuilder()
+        .setColor('#2ecc71')
+        .setTitle('Team Added')
+        .setThumbnail(
+          emoji.startsWith('<')
+            ? `https://cdn.discordapp.com/emojis/${emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+            : null
+        )
+        .addFields(
+          { name: 'Team', value: `${emoji} **${role.name}**`, inline: false },
+          { name: 'Division', value: `**${division.name}**`, inline: false },
+          { name: 'Added By', value: `${interaction.user.tag}`, inline: false }
+        )
+        .setTimestamp();
 
+      await logAction(client, { embeds: [embed] });
+
+      // User confirmation
       await i.update({
         content: `Team **${emoji} ${role.name}** has been added to division **${division.name}**.`,
         components: []
