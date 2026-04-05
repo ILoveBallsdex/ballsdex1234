@@ -1,4 +1,8 @@
-const { SlashCommandBuilder } = require('discord.js');
+const {
+  SlashCommandBuilder,
+  EmbedBuilder
+} = require('discord.js');
+
 const { CREATE_DIVISION_ROLE } = require('../../utils/permissions');
 const { loadJSON, saveJSON } = require('../../utils/database');
 const { logAction } = require('../../utils/logger');
@@ -7,12 +11,20 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('createdivision')
     .setDescription('Create a new division')
-    .addStringOption(opt => opt.setName('name').setDescription('Division name').setRequired(true))
-    .addStringOption(opt => opt.setName('emoji').setDescription('Division emoji').setRequired(true)),
+    .addStringOption(opt =>
+      opt.setName('name')
+        .setDescription('Division name')
+        .setRequired(true)
+    )
+    .addStringOption(opt =>
+      opt.setName('emoji')
+        .setDescription('Division emoji')
+        .setRequired(true)
+    ),
 
   async execute(interaction, client) {
 
-    // --- FIXED PERMISSION CHECK (supports single or multiple role IDs) ---
+    // --- PERMISSION CHECK ---
     const allowedRoles = Array.isArray(CREATE_DIVISION_ROLE)
       ? CREATE_DIVISION_ROLE
       : [CREATE_DIVISION_ROLE];
@@ -26,7 +38,7 @@ module.exports = {
         ephemeral: true
       });
     }
-    // ---------------------------------------------------------------------
+    // -------------------------
 
     const name = interaction.options.getString('name');
     const emoji = interaction.options.getString('emoji');
@@ -34,13 +46,43 @@ module.exports = {
     const divisions = loadJSON('divisions.json');
 
     if (divisions.find(d => d.name.toLowerCase() === name.toLowerCase())) {
-      return interaction.reply({ content: `A division named **${name}** already exists.`, ephemeral: true });
+      return interaction.reply({
+        content: `A division named **${name}** already exists.`,
+        ephemeral: true
+      });
     }
 
+    // Save division
     divisions.push({ name, emoji });
     saveJSON('divisions.json', divisions);
 
-    await logAction(client, `📁 Division **${emoji} ${name}** was created by ${interaction.user.tag}.`);
-    await interaction.reply({ content: `Division **${emoji} ${name}** has been created.` });
+    // --- EMBED LOG ---
+    const guild = interaction.guild;
+
+    const embed = new EmbedBuilder()
+      .setColor('#f1c40f')
+      .setAuthor({
+        name: guild.name,
+        iconURL: guild.iconURL({ size: 256 })
+      })
+      .setTitle('Division Created')
+      .setThumbnail(
+        emoji.startsWith('<')
+          ? `https://cdn.discordapp.com/emojis/${emoji.replace(/\D/g, '')}.png?size=256&quality=lossless`
+          : guild.iconURL({ size: 256 }) // fallback for unicode emoji
+      )
+      .addFields(
+        { name: 'Division Name', value: `**${name}**`, inline: false },
+        { name: 'Emoji', value: `${emoji}`, inline: false },
+        { name: 'Created By', value: `${interaction.user.tag}`, inline: false }
+      )
+      .setTimestamp();
+
+    await logAction(client, { embeds: [embed] });
+
+    // User confirmation
+    await interaction.reply({
+      content: `Division **${emoji} ${name}** has been created.`
+    });
   }
 };
